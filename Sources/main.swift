@@ -19,17 +19,17 @@ import ApplicationServices
 /// Agent mode: menu bar item plus the Space watcher.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBar: MenuBarController?
+    private var permissions: PermissionWindowController?
     private let watcher = Watcher()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        menuBar = MenuBarController(onShowPermissions: { [weak self] in self?.showPermissions() })
+        menuBar = MenuBarController(onShowPermissions: { [weak self] in self?.permissions?.show() })
+        permissions = PermissionWindowController(onGranted: { [weak self] in
+            ExitRecorder.ensureAttached()
+            self?.menuBar?.refreshIcon()
+        })
         watcher.start()
-        if !AXIsProcessTrusted() { showPermissions() }
-    }
-
-    private func showPermissions() {
-        // Adds DockUnstick to the Accessibility list and opens System Settings.
-        _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
+        if !AXIsProcessTrusted() { permissions?.show() }
     }
 }
 
