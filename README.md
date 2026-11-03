@@ -5,7 +5,7 @@
 <h1 align="center">DockUnstick</h1>
 
 <p align="center">
-  A tiny menu bar app that un-sticks the macOS Dock when it stays shown after switching full-screen Spaces.
+  A tiny background app that un-sticks the macOS Dock when it stays shown after switching full-screen Spaces.
 </p>
 
 <p align="center">
@@ -122,13 +122,15 @@ On first launch DockUnstick opens a setup window: click "Open System Settings" a
 
 ## Using it
 
-DockUnstick shows only a menu bar icon; it doesn't appear in the Dock. From its menu you can:
+DockUnstick runs in the background and doesn't appear in the Dock. Opening the app, or double-clicking it again while it runs, shows its window:
 
-- see whether it's running, and open the setup window when permission is missing;
-- see fix statistics: total fixes, fixes today, the last fix and failures;
-- turn "Launch at Login" on or off (uses the system login items; the first time you may need to allow it in System Settings → General → Login Items);
-- switch the language: Same as System, 中文 or English. By default it follows the system: Chinese when your first preferred language is Chinese, English for any other language;
-- open the log, reset the statistics, open the project page, or quit.
+- **Status:** whether it's running, with a button to the setup window when Accessibility is missing;
+- **Statistics:** total fixes, fixes today, the last fix and failures, plus a reset button;
+- **Settings:**
+  - "Show icon in menu bar": **off by default**. When on, the menu bar icon offers the same status, statistics and settings, and can open the window;
+  - "Launch at login": uses the system login items; the first time you may need to allow it in System Settings → General → Login Items. When started at login, DockUnstick stays quiet and shows no window;
+  - "Language": Same as System, 中文 or English. By default it follows the system: Chinese when your first preferred language is Chinese, English for any other language;
+- open the log, open the project page, or quit.
 
 ## Settings
 
@@ -136,7 +138,7 @@ These can be changed with `defaults`. Apart from `language`, restart DockUnstick
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `language` | string | `system` | UI language: `system` (follow the system), `zh` or `en`. Also switchable from the menu, effective immediately |
+| `language` | string | `system` | UI language: `system` (follow the system), `zh` or `en`. Also switchable in the window, effective immediately |
 | `trace` | bool | `true` | Log the Dock's state at every check |
 | `checkDelays` | array | `0.6 1.2 2.0` | Seconds after a Space switch at which the Dock is checked |
 
@@ -169,7 +171,7 @@ Both write to the log file above. Quit the running DockUnstick first.
 
 ## Uninstalling
 
-1. Turn off "Launch at Login" in the menu, then quit DockUnstick;
+1. Open DockUnstick, turn off "Launch at login" and click "Quit DockUnstick";
 2. Delete `DockUnstick.app`;
 3. Remove DockUnstick under System Settings → Privacy & Security → Accessibility;
 4. Optionally, clear its settings, statistics and logs:
