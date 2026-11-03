@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 
 let repositoryURL = URL(string: "https://github.com/LLP2333/dockUnstick")!
 
@@ -49,6 +50,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         }
         menu.addItem(.separator())
 
+        let login = action("登录时自动启动", #selector(toggleLaunchAtLogin))
+        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        menu.addItem(login)
         menu.addItem(action("打开日志", #selector(openLog)))
         menu.addItem(action("重置统计", #selector(resetStats)))
         menu.addItem(action("项目主页", #selector(openRepository)))
@@ -69,6 +73,22 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     @objc private func showPermissions() { onShowPermissions() }
+    @objc private func toggleLaunchAtLogin() {
+        let service = SMAppService.mainApp
+        do {
+            if service.status == .enabled {
+                try service.unregister()
+            } else {
+                try service.register()
+            }
+        } catch {
+            log("login item: \(error.localizedDescription)")
+        }
+        // The user may still have to allow it under Login Items.
+        if service.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
+        log("login item status: \(service.status.rawValue)")
+    }
+
     @objc private func openLog() { NSWorkspace.shared.open(logURL) }
     @objc private func resetStats() { FixStats.shared.reset() }
     @objc private func openRepository() { NSWorkspace.shared.open(repositoryURL) }
