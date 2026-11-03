@@ -133,3 +133,7 @@ open DockUnstick.app --args --dump 8
 defaults delete local.dockunstick
 rm ~/Library/Logs/DockUnstick.log
 ```
+
+## 许可证
+
+[MIT](LICENSE)
