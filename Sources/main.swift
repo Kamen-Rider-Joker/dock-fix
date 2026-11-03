@@ -3,7 +3,7 @@
 //
 // Usage (always launch through `open` so the app, not the terminal, owns the
 // Accessibility permission):
-//   open DockUnstick.app                       watch and fix (agent mode)
+//   open DockUnstick.app                       menu bar app: watch and fix (agent mode)
 //   open DockUnstick.app --args --dump 8       dump Dock AX state after 8 seconds
 //   open DockUnstick.app --args --tap 60       log events delivered to the Dock for 60 seconds
 // Settings (defaults domain local.dockunstick):
@@ -16,11 +16,26 @@ import ApplicationServices
 
 // MARK: - Entry point
 
+/// Agent mode: menu bar item plus the Space watcher.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var menuBar: MenuBarController?
+    private let watcher = Watcher()
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        menuBar = MenuBarController(onShowPermissions: { [weak self] in self?.showPermissions() })
+        watcher.start()
+        if !AXIsProcessTrusted() { showPermissions() }
+    }
+
+    private func showPermissions() {
+        // Adds DockUnstick to the Accessibility list and opens System Settings.
+        _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
+    }
+}
+
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
-
-let trusted = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
-log("start pid=\(getpid()) accessibilityTrusted=\(trusted) args=\(CommandLine.arguments.dropFirst())")
+log("start pid=\(getpid()) accessibilityTrusted=\(AXIsProcessTrusted()) args=\(CommandLine.arguments.dropFirst())")
 
 let args = CommandLine.arguments
 if let index = args.firstIndex(of: "--dump") {
@@ -39,7 +54,7 @@ if let index = args.firstIndex(of: "--dump") {
     }
     app.run()
 } else {
-    let watcher = Watcher()
-    watcher.start()
+    let delegate = AppDelegate()
+    app.delegate = delegate
     app.run()
 }

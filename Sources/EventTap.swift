@@ -79,9 +79,12 @@ enum ExitRecorder {
         return Unmanaged.passUnretained(event)
     }
 
-    /// (Re)attach when not attached yet or the Dock was relaunched.
+    static var isAttached: Bool { pid != nil && pid == dockPid() }
+
+    /// (Re)attach when not attached yet or the Dock was relaunched. A tap created
+    /// without Accessibility permission never receives events, so wait for it.
     static func ensureAttached() {
-        guard pid == nil || pid != dockPid() else { return }
+        guard !isAttached, AXIsProcessTrusted() else { return }
         if let port { CGEvent.tapEnable(tap: port, enable: false) }
         let mask = CGEventMask(1) << mouseEnteredType | CGEventMask(1) << mouseExitedType
         guard let tap = makeDockTap(mask: mask, callback: callback) else { log("recorder: could not tap the Dock"); return }

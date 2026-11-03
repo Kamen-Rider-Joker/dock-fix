@@ -73,9 +73,11 @@ final class Watcher {
         log("stuck: cursor=(\(Int(cursor.x)),\(Int(cursor.y))) \(snap.summary) hideExpected=\(expectHide)")
         guard replayExit(cursor: cursor) else {
             log("fix: no recorded exit event to replay")
+            FixStats.shared.record(fixed: false)
             return
         }
         let fixed = waitUntilFixed(expectHide: expectHide)
         log("fix: replayexit \(fixed ? "worked" : "did not help") -> \(snapshot()?.summary ?? "?")")
+        FixStats.shared.record(fixed: fixed)
     }
 }
