@@ -41,7 +41,6 @@ final class MainModel: ObservableObject {
     @Published var showMenuBar = false
     @Published var launchAtLogin = false
     @Published var language = AppLanguage.system
-    @Published var checkDelay = 0.0
 
     let showPermissions: () -> Void
 
@@ -64,7 +63,6 @@ final class MainModel: ObservableObject {
         showMenuBar = Preferences.showMenuBar
         launchAtLogin = LaunchAtLogin.isEnabled
         language = AppLanguage.setting
-        checkDelay = Preferences.checkDelay
     }
 }
 
@@ -108,7 +106,6 @@ struct MainView: View {
                         Text("English").tag(AppLanguage.en)
                     }
                     .fixedSize()
-                    checkTiming
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(8)
@@ -117,34 +114,6 @@ struct MainView: View {
         }
         .padding(20)
         .frame(width: 440)
-    }
-
-    /// Check immediately after a Space change, or once after a delay typed in seconds.
-    /// Choosing a delay starts from 0.1s; entering 0 goes back to immediately.
-    private var checkTiming: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Picker(L("检查时机", "Check"), selection: Binding(
-                    get: { model.checkDelay > 0 },
-                    set: { Preferences.checkDelay = $0 ? 0.1 : 0 })) {
-                    Text(L("立即", "Immediately")).tag(false)
-                    Text(L("延迟", "After a delay")).tag(true)
-                }
-                .fixedSize()
-                if model.checkDelay > 0 {
-                    TextField("", value: Binding(
-                        get: { model.checkDelay },
-                        set: { Preferences.checkDelay = $0 }),
-                              format: .number.precision(.fractionLength(0...3)))
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 60)
-                    Text(L("秒", "s"))
-                }
-            }
-            Text(L("切换 Space 后检查一次 Dock 是否卡住", "When to check the Dock, once, after a Space change"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
     }
 
     private func row(_ title: String, _ value: String) -> some View {

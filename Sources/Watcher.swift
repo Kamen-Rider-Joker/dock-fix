@@ -25,11 +25,10 @@ func waitUntilFixed(expectHide: Bool) -> Bool {
 
 /// Event-driven: no polling and no mouse monitoring. The bug only happens when the
 /// cursor leaves the Dock during a Space transition, so one check right after each
-/// Space change (or after Preferences.checkDelay) is enough. If the cursor is still
-/// on the Dock then, the Dock will get its normal exit event later.
+/// Space change is enough. If the cursor is still on the Dock then, the Dock will get
+/// its normal exit event later.
 final class Watcher {
     private var fixing = false
-    private var generation = 0
     private let trace = UserDefaults.standard.object(forKey: "trace") as? Bool ?? true
 
     func start() {
@@ -37,27 +36,20 @@ final class Watcher {
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in self?.spaceChanged() }
         ExitRecorder.ensureAttached()
-        log("watching for Space changes (check at \(Preferences.checkDelay)s)")
+        log("watching for Space changes")
     }
 
     private func spaceChanged() {
         ExitRecorder.ensureAttached()
-        generation += 1
-        let current = generation
         if trace { log("space changed: cursor=\(cursorLocation()) \(snapshot()?.summary ?? "no dock")") }
-        let delay = Preferences.checkDelay
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            // A newer Space change supersedes the pending check.
-            guard let self, self.generation == current else { return }
-            self.check(after: delay)
-        }
+        DispatchQueue.main.async { [weak self] in self?.check() }
     }
 
-    private func check(after delay: Double) {
+    private func check() {
         guard !fixing, let snap = snapshot() else { return }
         let cursor = cursorLocation()
         let expectHide = hideExpected()
-        if trace { log("check +\(delay)s: cursor=(\(Int(cursor.x)),\(Int(cursor.y))) \(snap.summary) hideExpected=\(expectHide)") }
+        if trace { log("check: cursor=(\(Int(cursor.x)),\(Int(cursor.y))) \(snap.summary) hideExpected=\(expectHide)") }
         // Stuck: cursor is away, yet the Dock still hovers an item or stays shown
         // when it should have auto-hidden.
         guard !snap.contains(cursor), !snap.hovered.isEmpty || (expectHide && snap.isShown) else { return }
