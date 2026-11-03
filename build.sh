@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 APP=DockUnstick.app
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp Info.plist "$APP/Contents/Info.plist"
-swiftc -O -o "$APP/Contents/MacOS/DockUnstick" Sources/main.swift
+swiftc -O -o "$APP/Contents/MacOS/DockUnstick" Sources/*.swift
 
 # App icon: render every size iconutil expects from the 1024px master.
 ICONSET=$(mktemp -d)/AppIcon.iconset
