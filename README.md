@@ -100,7 +100,7 @@ defaults write local.dockunstick trace -bool false
 defaults write local.dockunstick checkDelays -array 0.4 1.0 2.0
 ```
 
-日志位置：`~/Library/Logs/DockUnstick.log`
+日志位置：`~/Library/Logs/DockUnstick.log`。超过 1 MB 时会改名为 `DockUnstick.log.1`(覆盖上一份)，然后重新开始写，所以两个文件加起来最多约 2 MB。
 
 ## 诊断模式
 
@@ -131,7 +131,7 @@ open DockUnstick.app --args --dump 8
 
 ```bash
 defaults delete local.dockunstick
-rm ~/Library/Logs/DockUnstick.log
+rm -f ~/Library/Logs/DockUnstick.log ~/Library/Logs/DockUnstick.log.1
 ```
 
 ## 许可证
