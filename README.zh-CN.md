@@ -132,18 +132,20 @@ DockUnstick 在后台运行，不出现在 Dock 里。点击菜单栏图标会�
   - 「登录时自动启动」：使用系统的登录项，首次可能需要在 系统设置 → 通用 → 登录项 中允许。登录时自动启动不会展开面板，只在后台安静运行；
   - 「语言」：跟随系统、中文或 English。默认跟随系统：系统首选语言是中文时显示中文，其他语言一律显示英文；
   - 「菜单栏图标」：「dockUnstick（默认）」保留项目原版图标，另有 23 个样式，包括云朵、街机、人物头像、小动物和彩色 Emoji，选择后立即生效；
+  - 「记录日志」：**默认关闭**。打开后才写入诊断日志；`--dump` 和 `--tap` 诊断模式仍会临时记录；
   - 「修复节奏」：可调整检查次数和间隔。切换 Space 后会立即检查一次；如果没能确认 Dock 正常(鼠标还在 Dock 上，或者修复没有生效)，就按间隔再检查。次数 0–5，**默认 3 次**；间隔 0.1–1 秒，**默认 0.5 秒**。拖动后从下一次切换 Space 开始生效；
 - 打开日志、打开项目主页、重置统计或退出。
 
 ## 设置
 
-可以用 `defaults` 调整。除了 `language`、`menuBarIcon`、`retryCount` 和 `retryInterval` 以外，修改后都要重启 DockUnstick 才生效:
+可以用 `defaults` 调整。除了 `language`、`menuBarIcon`、`loggingEnabled`、`retryCount` 和 `retryInterval` 以外，修改后都要重启 DockUnstick 才生效:
 
 | 键 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
 | `language` | 字符串 | `system` | 界面语言：`system`(跟随系统)、`zh` 或 `en`，也可以在面板里切换，立即生效 |
 | `menuBarIcon` | 字符串 | `original` | 菜单栏图标。可选 `original`、`rocket`、`protection`、`diagnostics`、`cat`、`game`、`puzzle`、`lightning`、`cloud`、`cloudSun`、`arcade`、`bobAvatar`、`tuftAvatar`、`twinTailAvatar`、`bird`、`fish`、`alien`、`panda`、`fox`、`frog`、`bubbleTea`、`sushi`、`ghost` 或 `robot` |
-| `trace` | bool | `true` | 每次检查都把 Dock 状态写入日志 |
+| `loggingEnabled` | bool | `false` | 是否写入日志。也可以在面板里切换 |
+| `trace` | bool | `true` | 开启日志时，每次检查都把 Dock 状态写入日志 |
 | `retryCount` | 整数 | `3` | 第一次检查没能确认 Dock 正常时，最多再检查几次(0–5)。也可以在面板里调整 |
 | `retryInterval` | 数字 | `0.5` | 每次再检查之间间隔几秒(0.1–1)。也可以在面板里调整 |
 
@@ -153,7 +155,7 @@ defaults write local.dockunstick retryCount -int 5
 defaults write local.dockunstick retryInterval -float 0.2
 ```
 
-日志位置：`~/Library/Logs/DockUnstick.log`。超过 1 MB 时会改名为 `DockUnstick.log.1`(覆盖上一份)，然后重新开始写，所以两个文件加起来最多约 2 MB。
+日志默认关闭。开启后写入 `~/Library/Logs/DockUnstick.log`；超过 1 MB 时会改名为 `DockUnstick.log.1`(覆盖上一份)，然后重新开始写，所以两个文件加起来最多约 2 MB。
 
 ## 诊断模式
 

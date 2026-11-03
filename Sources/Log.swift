@@ -7,7 +7,12 @@ let logURL = FileManager.default.homeDirectoryForCurrentUser
 /// the two files together stay around 2 MB.
 let logSizeLimit: UInt64 = 1_000_000
 
+private let diagnosticLoggingEnabled = CommandLine.arguments.contains {
+    $0 == "--tap" || $0 == "--dump"
+}
+
 func log(_ message: String) {
+    guard diagnosticLoggingEnabled || Preferences.loggingEnabled else { return }
     let line = "\(ISO8601DateFormatter.withFraction.string(from: Date())) \(message)\n"
     FileHandle.standardError.write(line.data(using: .utf8)!)
     rotateIfNeeded(logURL, limit: logSizeLimit)

@@ -13,6 +13,7 @@ final class MainModel: ObservableObject {
     @Published var language = AppLanguage.system
     @Published var retryCount = 0
     @Published var retryInterval = 0.0
+    @Published var loggingEnabled = false
 
     let showPermissions: () -> Void
 
@@ -44,6 +45,7 @@ final class MainModel: ObservableObject {
         language = AppLanguage.setting
         retryCount = Preferences.retryCount
         retryInterval = Preferences.retryInterval
+        loggingEnabled = Preferences.loggingEnabled
     }
 
     var successRate: Int? {
@@ -337,6 +339,16 @@ struct MainView: View {
                         .lineLimit(1)
                 }
                 .menuStyle(.borderlessButton)
+            }
+
+            settingsRow(L("记录日志", "Write logs"), systemImage: "doc.text.magnifyingglass") {
+                Toggle("", isOn: Binding(
+                    get: { model.loggingEnabled },
+                    set: { Preferences.loggingEnabled = $0 }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
             }
         }
     }

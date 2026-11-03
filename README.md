@@ -132,18 +132,20 @@ DockUnstick runs in the background and doesn't appear in the Dock. Clicking its 
   - "Launch at login": uses the system login items; the first time you may need to allow it in System Settings → General → Login Items. When started at login, DockUnstick stays quiet and does not open the panel;
   - "Language": Same as System, 中文 or English. By default it follows the system: Chinese when your first preferred language is Chinese, English for any other language;
   - "Menu bar icon": `dockUnstick (Default)` preserves the original icon. Choose from 23 alternatives, including clouds, arcade, avatars, animals and color Emoji. The change applies immediately;
+  - "Write logs": **off by default**. Logs are written only when this is enabled; the `--dump` and `--tap` diagnostic modes still log temporarily;
   - "Repair pacing": adjust the retries and interval. The Dock is checked right after a Space switch; when that can't confirm it's fine (the cursor is still on it, or a fix didn't take), it is checked again at the interval. Retries 0–5, **3 by default**; interval 0.1–1 second, **0.5 by default**. A change applies from the next Space switch;
 - open the log, open the project page, reset statistics or quit.
 
 ## Settings
 
-These can be changed with `defaults`. Apart from `language`, `menuBarIcon`, `retryCount` and `retryInterval`, restart DockUnstick for a change to take effect:
+These can be changed with `defaults`. Apart from `language`, `menuBarIcon`, `loggingEnabled`, `retryCount` and `retryInterval`, restart DockUnstick for a change to take effect:
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `language` | string | `system` | UI language: `system` (follow the system), `zh` or `en`. Also switchable in the panel, effective immediately |
 | `menuBarIcon` | string | `original` | Menu bar artwork. Values: `original`, `rocket`, `protection`, `diagnostics`, `cat`, `game`, `puzzle`, `lightning`, `cloud`, `cloudSun`, `arcade`, `bobAvatar`, `tuftAvatar`, `twinTailAvatar`, `bird`, `fish`, `alien`, `panda`, `fox`, `frog`, `bubbleTea`, `sushi`, `ghost` or `robot` |
-| `trace` | bool | `true` | Log the Dock's state at every check |
+| `loggingEnabled` | bool | `false` | Write diagnostic logs. Also switchable in the panel |
+| `trace` | bool | `true` | When logging is enabled, record the Dock's state at every check |
 | `retryCount` | integer | `3` | How many more checks at most when the first can't confirm the Dock is fine (0–5). Also adjustable in the panel |
 | `retryInterval` | number | `0.5` | Seconds between those checks (0.1–1). Also adjustable in the panel |
 
@@ -153,7 +155,7 @@ defaults write local.dockunstick retryCount -int 5
 defaults write local.dockunstick retryInterval -float 0.2
 ```
 
-The log is at `~/Library/Logs/DockUnstick.log`. Past 1 MB it is renamed to `DockUnstick.log.1` (replacing the previous one) and a fresh log starts, so the two files together stay around 2 MB at most.
+Logging is off by default. When enabled, the log is at `~/Library/Logs/DockUnstick.log`. Past 1 MB it is renamed to `DockUnstick.log.1` (replacing the previous one) and a fresh log starts, so the two files together stay around 2 MB at most.
 
 ## Diagnostic modes
 

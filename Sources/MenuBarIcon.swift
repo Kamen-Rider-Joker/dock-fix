@@ -63,7 +63,7 @@ enum MenuBarIconStyle: String, CaseIterable {
             let symbol = AXIsProcessTrusted() ? "dock.arrow.down.rectangle" : "exclamationmark.triangle"
             image = Self.symbolCanvas(symbol, pointSize: 16.5, weight: .medium)
         case .rocket:
-            image = Self.symbolCanvas("rocket.fill", pointSize: 16.5, weight: .medium)
+            image = Self.rocketCanvas()
         case .protection:
             image = Self.symbolCanvas("checkmark.shield.fill", pointSize: 17, weight: .medium)
         case .diagnostics:
@@ -162,6 +162,74 @@ enum MenuBarIconStyle: String, CaseIterable {
                 ),
                 withAttributes: attributes
             )
+            return true
+        }
+    }
+
+    private static func rocketCanvas() -> NSImage {
+        NSImage(size: canvasSize, flipped: false) { _ in
+            NSColor.black.setFill()
+            NSColor.black.setStroke()
+
+            let body = NSBezierPath()
+            body.move(to: NSPoint(x: 12, y: 20))
+            body.curve(
+                to: NSPoint(x: 15.3, y: 15.7),
+                controlPoint1: NSPoint(x: 13.8, y: 18.5),
+                controlPoint2: NSPoint(x: 15.3, y: 17.5)
+            )
+            body.curve(
+                to: NSPoint(x: 14, y: 6.1),
+                controlPoint1: NSPoint(x: 15.3, y: 13.4),
+                controlPoint2: NSPoint(x: 14.8, y: 8.3)
+            )
+            body.curve(
+                to: NSPoint(x: 10, y: 6.1),
+                controlPoint1: NSPoint(x: 13, y: 5.1),
+                controlPoint2: NSPoint(x: 11, y: 5.1)
+            )
+            body.curve(
+                to: NSPoint(x: 8.7, y: 15.7),
+                controlPoint1: NSPoint(x: 9.2, y: 8.3),
+                controlPoint2: NSPoint(x: 8.7, y: 13.4)
+            )
+            body.curve(
+                to: NSPoint(x: 12, y: 20),
+                controlPoint1: NSPoint(x: 8.7, y: 17.5),
+                controlPoint2: NSPoint(x: 10.2, y: 18.5)
+            )
+            body.appendOval(in: NSRect(x: 10.3, y: 12.2, width: 3.4, height: 3.4))
+            body.windingRule = .evenOdd
+            body.fill()
+
+            let leftFin = NSBezierPath()
+            leftFin.move(to: NSPoint(x: 9.2, y: 10.2))
+            leftFin.line(to: NSPoint(x: 5.2, y: 6.2))
+            leftFin.line(to: NSPoint(x: 6, y: 12.3))
+            leftFin.close()
+            leftFin.fill()
+
+            let rightFin = NSBezierPath()
+            rightFin.move(to: NSPoint(x: 14.8, y: 10.2))
+            rightFin.line(to: NSPoint(x: 18.8, y: 6.2))
+            rightFin.line(to: NSPoint(x: 18, y: 12.3))
+            rightFin.close()
+            rightFin.fill()
+
+            let flame = NSBezierPath()
+            flame.move(to: NSPoint(x: 9.8, y: 6))
+            flame.curve(
+                to: NSPoint(x: 12, y: 1.2),
+                controlPoint1: NSPoint(x: 10.3, y: 4.7),
+                controlPoint2: NSPoint(x: 11.2, y: 2.2)
+            )
+            flame.curve(
+                to: NSPoint(x: 14.2, y: 6),
+                controlPoint1: NSPoint(x: 12.8, y: 2.2),
+                controlPoint2: NSPoint(x: 13.7, y: 4.7)
+            )
+            flame.close()
+            flame.fill()
             return true
         }
     }

@@ -18,6 +18,16 @@ enum Preferences {
         }
     }
 
+    /// File logging is opt-in. Diagnostic command-line modes bypass this flag.
+    static var loggingEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: "loggingEnabled") }
+        set {
+            guard newValue != loggingEnabled else { return }
+            UserDefaults.standard.set(newValue, forKey: "loggingEnabled")
+            NotificationCenter.default.post(name: didChange, object: nil)
+        }
+    }
+
     static let retryCountRange = 0...5
     static let retryIntervalRange = 0.1...1.0
 
