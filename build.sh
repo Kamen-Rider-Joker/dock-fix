@@ -3,8 +3,20 @@
 set -eu
 cd "$(dirname "$0")"
 APP=DockUnstick.app
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp Info.plist "$APP/Contents/Info.plist"
 swiftc -O -o "$APP/Contents/MacOS/DockUnstick" Sources/main.swift
+
+# App icon: render every size iconutil expects from the 1024px master.
+ICONSET=$(mktemp -d)/AppIcon.iconset
+mkdir -p "$ICONSET"
+for size in 16 32 128 256 512; do
+    sips -z $size $size Assets/AppIcon-1024.png --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+    double=$((size * 2))
+    sips -z $double $double Assets/AppIcon-1024.png --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
+rm -rf "$(dirname "$ICONSET")"
+
 codesign --force --sign - --identifier local.dockunstick "$APP"
 echo "built $PWD/$APP"

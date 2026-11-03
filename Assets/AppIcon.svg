@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="tile" x1="160" y1="100" x2="820" y2="924" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6777F4"/>
+      <stop offset=".48" stop-color="#4657D4"/>
+      <stop offset="1" stop-color="#273785"/>
+    </linearGradient>
+    <linearGradient id="dock" x1="512" y1="625" x2="512" y2="793" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F4F7FF"/>
+      <stop offset="1" stop-color="#C7D5FA"/>
+    </linearGradient>
+    <linearGradient id="app" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#99B0F4"/>
+      <stop offset="1" stop-color="#728CDB"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="20" stdDeviation="18" flood-color="#101A4C" flood-opacity=".28"/>
+    </filter>
+    <filter id="dockShadow" x="-20%" y="-40%" width="140%" height="190%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#142056" flood-opacity=".25"/>
+    </filter>
+  </defs>
+  <!-- Continuous squircle silhouette; 824 px tile with 100 px clear inset. -->
+  <path d="M 512 100 C 696 100 788 100 856 168 C 924 236 924 328 924 512 C 924 696 924 788 856 856 C 788 924 696 924 512 924 C 328 924 236 924 168 856 C 100 788 100 696 100 512 C 100 328 100 236 168 168 C 236 100 328 100 512 100 Z" fill="url(#tile)" filter="url(#shadow)"/>
+  <path d="M 512 103 C 695 103 787 103 854 170 C 921 237 921 329 921 512" fill="none" stroke="#FFFFFF" stroke-opacity=".16" stroke-width="4"/>
+  <!-- Bold return arrow aligned with the elevated Dock tile. -->
+  <path d="M 574 282 L 574 444 M 505 382 L 574 451 L 643 382" fill="none" stroke="#F7FAFF" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- A single light tray and four large tiles remain readable at small sizes. -->
+  <rect x="216" y="625" width="592" height="168" rx="50" fill="url(#dock)" stroke="#FFFFFF" stroke-opacity=".55" stroke-width="3" filter="url(#dockShadow)"/>
+  <rect x="252" y="657" width="104" height="104" rx="25" fill="url(#app)"/>
+  <rect x="390" y="657" width="104" height="104" rx="25" fill="url(#app)"/>
+  <rect x="522" y="553" width="104" height="104" rx="25" fill="#FFCC70" filter="url(#dockShadow)"/>
+  <rect x="668" y="657" width="104" height="104" rx="25" fill="url(#app)"/>
+</svg>
