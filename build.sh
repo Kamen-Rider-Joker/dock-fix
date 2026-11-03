@@ -5,7 +5,13 @@ cd "$(dirname "$0")"
 APP=DockUnstick.app
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp Info.plist "$APP/Contents/Info.plist"
-swiftc -O -o "$APP/Contents/MacOS/DockUnstick" Sources/*.swift
+# Universal binary so the app also runs on Intel Macs.
+BIN=$(mktemp -d)
+for arch in arm64 x86_64; do
+    swiftc -O -target "$arch-apple-macos13.0" -o "$BIN/$arch" Sources/*.swift
+done
+lipo -create "$BIN/arm64" "$BIN/x86_64" -output "$APP/Contents/MacOS/DockUnstick"
+rm -rf "$BIN"
 
 # App icon: render every size iconutil expects from the 1024px master.
 ICONSET=$(mktemp -d)/AppIcon.iconset
