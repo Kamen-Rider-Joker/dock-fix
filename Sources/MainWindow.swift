@@ -41,6 +41,8 @@ final class MainModel: ObservableObject {
     @Published var showMenuBar = false
     @Published var launchAtLogin = false
     @Published var language = AppLanguage.system
+    @Published var retryCount = 0
+    @Published var retryInterval = 0.0
 
     let showPermissions: () -> Void
 
@@ -63,6 +65,8 @@ final class MainModel: ObservableObject {
         showMenuBar = Preferences.showMenuBar
         launchAtLogin = LaunchAtLogin.isEnabled
         language = AppLanguage.setting
+        retryCount = Preferences.retryCount
+        retryInterval = Preferences.retryInterval
     }
 }
 
@@ -106,6 +110,7 @@ struct MainView: View {
                         Text("English").tag(AppLanguage.en)
                     }
                     .fixedSize()
+                    retries
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(8)
@@ -114,6 +119,38 @@ struct MainView: View {
         }
         .padding(20)
         .frame(width: 440)
+    }
+
+    /// Sliders write as they move, so a change applies from the next Space switch.
+    private var retries: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            slider(L("重试次数", "Retries"),
+                   value: Binding(get: { Double(model.retryCount) }, set: { Preferences.retryCount = Int($0.rounded()) }),
+                   range: Double(Preferences.retryCountRange.lowerBound)...Double(Preferences.retryCountRange.upperBound),
+                   step: 1,
+                   text: L("\(model.retryCount) 次", "\(model.retryCount)"))
+            slider(L("重试间隔", "Interval"),
+                   value: Binding(get: { model.retryInterval }, set: { Preferences.retryInterval = $0 }),
+                   range: Preferences.retryIntervalRange,
+                   step: 0.1,
+                   text: L("\(String(format: "%.1f", model.retryInterval)) 秒", "\(String(format: "%.1f", model.retryInterval)) s"))
+            Text(L("切换 Space 后立即检查 Dock；没能确认 Dock 正常（鼠标还在 Dock 上或修复没生效）时，按间隔再检查",
+                   "The Dock is checked right after a Space switch, and again at this interval while it can't be confirmed fine (cursor still on it, or a fix didn't take)"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func slider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double, text: String) -> some View {
+        HStack {
+            Text(title).frame(width: 64, alignment: .leading)
+            Slider(value: value, in: range, step: step)
+            Text(text)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .frame(width: 44, alignment: .trailing)
+        }
     }
 
     private func row(_ title: String, _ value: String) -> some View {

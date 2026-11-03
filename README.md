@@ -75,10 +75,10 @@ What DockUnstick does is notice when the shopkeeper is still waiting on a custom
 ## What it does
 
 - **Records:** a listen-only event tap (`CGEvent.tapCreateForPid`) on the Dock process subscribes to just the "entered/exited" events and keeps the most recent "mouse exited" event.
-- **Detects:** right after every Space switch it checks once. If the cursor is no longer on the Dock but the Dock still has a hovered icon, or stays shown when it should have auto-hidden, the Dock is stuck.
+- **Detects:** right after every Space switch it checks once; if the cursor is still on the Dock, or a fix didn't take, it checks again at a set interval, by default up to 3 more times, 0.5 seconds apart. If the cursor is no longer on the Dock but the Dock still has a hovered icon, or stays shown when it should have auto-hidden, the Dock is stuck.
 - **Fixes:** it copies the saved "mouse exited" event, updates its time and cursor position, and delivers it to the Dock process (`CGEvent.postToPid`). Once the Dock gets the event it missed, it drops the hover and hides as usual.
 
-Throughout, it **never moves the cursor, restarts the Dock, reads the screen or goes online**. It doesn't poll; it only checks once after each Space switch. Only public APIs are used.
+Throughout, it **never moves the cursor, restarts the Dock, reads the screen or goes online**. It doesn't poll; it only checks a few times after each Space switch. Only public APIs are used.
 
 Tested on the author's Mac: 8 of 8 stuck cases fixed, with the Dock hiding about 1 second after the Space switch.
 
@@ -130,19 +130,24 @@ DockUnstick runs in the background and doesn't appear in the Dock. Opening the a
   - "Show icon in menu bar": **off by default**. When on, the menu bar icon offers the same status, statistics and settings, and can open the window;
   - "Launch at login": uses the system login items; the first time you may need to allow it in System Settings → General → Login Items. When started at login, DockUnstick stays quiet and shows no window;
   - "Language": Same as System, 中文 or English. By default it follows the system: Chinese when your first preferred language is Chinese, English for any other language;
+  - "Retries" and "Interval": two sliders. The Dock is checked right after a Space switch; when that can't confirm it's fine (the cursor is still on it, or a fix didn't take), it is checked again at the interval. Retries 0–5, **3 by default**; interval 0.1–1 second, **0.5 by default**. A change applies from the next Space switch;
 - open the log, open the project page, or quit.
 
 ## Settings
 
-These can be changed with `defaults`. Apart from `language`, restart DockUnstick for a change to take effect:
+These can be changed with `defaults`. Apart from `language`, `retryCount` and `retryInterval`, restart DockUnstick for a change to take effect:
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `language` | string | `system` | UI language: `system` (follow the system), `zh` or `en`. Also switchable in the window, effective immediately |
 | `trace` | bool | `true` | Log the Dock's state at every check |
+| `retryCount` | integer | `3` | How many more checks at most when the first can't confirm the Dock is fine (0–5). Also adjustable in the window |
+| `retryInterval` | number | `0.5` | Seconds between those checks (0.1–1). Also adjustable in the window |
 
 ```bash
 defaults write local.dockunstick trace -bool false
+defaults write local.dockunstick retryCount -int 5
+defaults write local.dockunstick retryInterval -float 0.2
 ```
 
 The log is at `~/Library/Logs/DockUnstick.log`. Past 1 MB it is renamed to `DockUnstick.log.1` (replacing the previous one) and a fresh log starts, so the two files together stay around 2 MB at most.

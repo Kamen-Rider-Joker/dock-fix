@@ -8,6 +8,8 @@
 //   open DockUnstick.app --args --tap 60       log events delivered to the Dock for 60 seconds
 // Settings (defaults domain local.dockunstick):
 //   trace        bool, log Dock state at every check (default true)
+//   retryCount   int, checks after the first while the Dock isn't confirmed fine (default 3, 0-5)
+//   retryInterval  seconds between those checks (default 0.5, 0.1-1)
 // Log: ~/Library/Logs/DockUnstick.log
 
 import AppKit
