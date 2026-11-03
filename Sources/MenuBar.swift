@@ -74,7 +74,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             choice.state = AppLanguage.setting == language ? .on : .off
             submenu.addItem(choice)
         }
-        let item = NSMenuItem(title: L("语言 / Language", "Language / 语言"), action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: L("语言", "Language"), action: nil, keyEquivalent: "")
         item.submenu = submenu
         return item
     }
