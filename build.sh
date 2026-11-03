@@ -24,5 +24,13 @@ done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 rm -rf "$(dirname "$ICONSET")"
 
-codesign --force --sign - --identifier local.dockunstick "$APP"
+# Ad-hoc signing is convenient for local builds, but macOS ties Accessibility
+# permission to its changing code hash. Set CODESIGN_IDENTITY to a stable
+# Developer ID identity when repeated authorization after rebuilds is a problem.
+IDENTITY="${CODESIGN_IDENTITY:--}"
+if [ "$IDENTITY" = "-" ]; then
+    codesign --force --sign - --identifier local.dockunstick "$APP"
+else
+    codesign --force --options runtime --sign "$IDENTITY" --identifier local.dockunstick "$APP"
+fi
 echo "built $PWD/$APP"

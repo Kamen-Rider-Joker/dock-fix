@@ -116,33 +116,36 @@ open /Applications/DockUnstick.app
 
 ### Granting Accessibility
 
-On first launch DockUnstick opens a setup window: click "Grant…", choose "Open System Settings" in the system prompt, and turn on DockUnstick under **Privacy & Security → Accessibility**. The window notices the permission by itself, and you can close it afterwards.
+On first launch, click the DockUnstick icon in the menu bar and choose "Grant…" in the panel. Turn on DockUnstick under **Privacy & Security → Accessibility**. The panel notices the permission automatically and will not keep opening additional setup windows.
 
 > The app is ad-hoc signed, so **macOS treats every new build as a new app** and the old permission stops working. The switch then looks on but has no effect. Remove DockUnstick with **−** and add it again with **+**.
+>
+> For development, a Developer ID certificate provides a stable identity: `CODESIGN_IDENTITY="Developer ID Application: Name (TEAMID)" ./build.sh`.
 
 ## Using it
 
-DockUnstick runs in the background and doesn't appear in the Dock. Opening the app, or double-clicking it again while it runs, shows its window:
+DockUnstick runs in the background and doesn't appear in the Dock. Clicking its menu bar icon opens a lightweight anchored panel. Opening it again while it is already running shows the same panel without creating a regular window:
 
-- **Status:** whether it's running, with a button to the setup window when Accessibility is missing;
-- **Statistics:** total fixes, fixes today, the last fix and failures, plus a reset button;
+- **Status:** whether it's running, with a direct link to Accessibility settings when permission is missing;
+- **Rescue dashboard:** today's rescues are the headline, with a rescue rank, streak, total fixes, success rate, last fix and seven-day activity chart;
 - **Settings:**
-  - "Show icon in menu bar": **off by default**. When on, the menu bar icon offers the same status, statistics and settings, and can open the window;
-  - "Launch at login": uses the system login items; the first time you may need to allow it in System Settings → General → Login Items. When started at login, DockUnstick stays quiet and shows no window;
+  - "Launch at login": uses the system login items; the first time you may need to allow it in System Settings → General → Login Items. When started at login, DockUnstick stays quiet and does not open the panel;
   - "Language": Same as System, 中文 or English. By default it follows the system: Chinese when your first preferred language is Chinese, English for any other language;
-  - "Retries" and "Interval": two sliders. The Dock is checked right after a Space switch; when that can't confirm it's fine (the cursor is still on it, or a fix didn't take), it is checked again at the interval. Retries 0–5, **3 by default**; interval 0.1–1 second, **0.5 by default**. A change applies from the next Space switch;
-- open the log, open the project page, or quit.
+  - "Menu bar icon": `dockUnstick (Default)` preserves the original icon. Choose from 23 alternatives, including clouds, arcade, avatars, animals and color Emoji. The change applies immediately;
+  - "Repair pacing": adjust the retries and interval. The Dock is checked right after a Space switch; when that can't confirm it's fine (the cursor is still on it, or a fix didn't take), it is checked again at the interval. Retries 0–5, **3 by default**; interval 0.1–1 second, **0.5 by default**. A change applies from the next Space switch;
+- open the log, open the project page, reset statistics or quit.
 
 ## Settings
 
-These can be changed with `defaults`. Apart from `language`, `retryCount` and `retryInterval`, restart DockUnstick for a change to take effect:
+These can be changed with `defaults`. Apart from `language`, `menuBarIcon`, `retryCount` and `retryInterval`, restart DockUnstick for a change to take effect:
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `language` | string | `system` | UI language: `system` (follow the system), `zh` or `en`. Also switchable in the window, effective immediately |
+| `language` | string | `system` | UI language: `system` (follow the system), `zh` or `en`. Also switchable in the panel, effective immediately |
+| `menuBarIcon` | string | `original` | Menu bar artwork. Values: `original`, `rocket`, `protection`, `diagnostics`, `cat`, `game`, `puzzle`, `lightning`, `cloud`, `cloudSun`, `arcade`, `bobAvatar`, `tuftAvatar`, `twinTailAvatar`, `bird`, `fish`, `alien`, `panda`, `fox`, `frog`, `bubbleTea`, `sushi`, `ghost` or `robot` |
 | `trace` | bool | `true` | Log the Dock's state at every check |
-| `retryCount` | integer | `3` | How many more checks at most when the first can't confirm the Dock is fine (0–5). Also adjustable in the window |
-| `retryInterval` | number | `0.5` | Seconds between those checks (0.1–1). Also adjustable in the window |
+| `retryCount` | integer | `3` | How many more checks at most when the first can't confirm the Dock is fine (0–5). Also adjustable in the panel |
+| `retryInterval` | number | `0.5` | Seconds between those checks (0.1–1). Also adjustable in the panel |
 
 ```bash
 defaults write local.dockunstick trace -bool false

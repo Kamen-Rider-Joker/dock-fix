@@ -3,7 +3,7 @@
 //
 // Usage (always launch through `open` so the app, not the terminal, owns the
 // Accessibility permission):
-//   open DockUnstick.app                       watch and fix, with a window and optional menu bar icon
+//   open DockUnstick.app                       watch and fix, with an anchored menu bar panel
 //   open DockUnstick.app --args --dump 8       dump Dock AX state after 8 seconds
 //   open DockUnstick.app --args --tap 60       log events delivered to the Dock for 60 seconds
 // Settings (defaults domain local.dockunstick):
@@ -17,45 +17,25 @@ import ApplicationServices
 
 // MARK: - Entry point
 
-/// Agent mode: the Space watcher, the main window and the optional menu bar item.
+/// Agent mode: the Space watcher and the menu bar panel.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBar: MenuBarController?
-    private var permissions: PermissionWindowController?
-    private var mainWindow: MainWindowController?
     private let watcher = Watcher()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = KeyCommands.shared.makeMainMenu()
-        permissions = PermissionWindowController(onGranted: { [weak self] in
-            ExitRecorder.ensureAttached()
-            self?.menuBar?.refreshIcon()
-        })
-        mainWindow = MainWindowController(onShowPermissions: { [weak self] in self?.permissions?.show() })
-        menuBar = MenuBarController(onShowPermissions: { [weak self] in self?.permissions?.show() },
-                                    onShowMainWindow: { [weak self] in self?.mainWindow?.show() })
-        NotificationCenter.default.addObserver(forName: AppLanguage.didChange, object: nil, queue: .main) { [weak self] _ in
-            self?.permissions?.languageChanged()
-        }
+        AccessibilityPermission.startMonitoring()
+        ExitRecorder.ensureAttached()
+        menuBar = MenuBarController(onShowPermissions: AccessibilityPermission.request)
         watcher.start()
-        if !AXIsProcessTrusted() {
-            permissions?.show()
-        } else if !launchedAsLoginItem() {
-            mainWindow?.show()
-        }
     }
 
-    /// Opening the app again (e.g. double-clicking it while it runs) brings up the window.
+    /// Opening the app again (e.g. double-clicking it while it runs) reveals the panel.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        mainWindow?.show()
+        menuBar?.showPanel()
         return false
     }
 
-    /// Stay quiet when started at login; only an explicit launch shows the window.
-    private func launchedAsLoginItem() -> Bool {
-        guard let event = NSAppleEventManager.shared().currentAppleEvent else { return false }
-        return event.eventID == kAEOpenApplication
-            && event.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
-    }
 }
 
 let app = NSApplication.shared

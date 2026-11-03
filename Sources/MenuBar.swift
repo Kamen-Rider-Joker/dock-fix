@@ -1,122 +1,89 @@
 import AppKit
+import SwiftUI
 
-/// Optional menu bar item: running state, fix statistics and a few actions.
-/// Shown only while Preferences.showMenuBar is on.
-final class MenuBarController: NSObject, NSMenuDelegate {
+/// The status item is the app's only primary surface. Clicking it reveals an
+/// anchored, transient panel instead of creating a regular application window.
+final class MenuBarController: NSObject, NSPopoverDelegate {
     private var item: NSStatusItem?
-    private let menu = NSMenu()
-    private let onShowPermissions: () -> Void
-    private let onShowMainWindow: () -> Void
+    private let popover = NSPopover()
+    private let model: MainModel
+    private var refreshTimer: Timer?
 
-    init(onShowPermissions: @escaping () -> Void, onShowMainWindow: @escaping () -> Void) {
-        self.onShowPermissions = onShowPermissions
-        self.onShowMainWindow = onShowMainWindow
+    init(onShowPermissions: @escaping () -> Void) {
+        model = MainModel(onShowPermissions: onShowPermissions)
         super.init()
-        menu.delegate = self
-        updateVisibility()
-        for name in [FixStats.didChange, AppLanguage.didChange] {
+
+        let statusItem = NSStatusBar.system.statusItem(withLength: 30)
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(togglePanel)
+        statusItem.button?.imagePosition = .imageOnly
+        item = statusItem
+
+        popover.behavior = .transient
+        popover.animates = true
+        popover.delegate = self
+        popover.contentSize = NSSize(width: 410, height: 650)
+        popover.contentViewController = NSHostingController(rootView: MainView(model: model))
+
+        refreshIcon()
+        for name in [
+            FixStats.didChange,
+            AppLanguage.didChange,
+            AccessibilityPermission.didChange,
+            Preferences.didChange
+        ] {
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                self?.model.refresh()
                 self?.refreshIcon()
             }
         }
-        NotificationCenter.default.addObserver(forName: Preferences.didChange, object: nil, queue: .main) { [weak self] _ in
-            self?.updateVisibility()
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, self.popover.isShown else { return }
+            self.popover.performClose(nil)
         }
     }
 
-    private func updateVisibility() {
-        if Preferences.showMenuBar, item == nil {
-            item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-            item?.menu = menu
-            refreshIcon()
-        } else if !Preferences.showMenuBar, let item {
-            NSStatusBar.system.removeStatusItem(item)
-            self.item = nil
-        }
+    func showPanel() {
+        guard let button = item?.button else { return }
+        model.refresh()
+        NSApp.activate(ignoringOtherApps: true)
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        startRefreshTimer()
+        log("menu panel: opened")
     }
 
     func refreshIcon() {
-        guard let item else { return }
-        let symbol = AXIsProcessTrusted() ? "dock.arrow.down.rectangle" : "exclamationmark.triangle"
-        item.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "DockUnstick")
-        item.button?.toolTip = L("DockUnstick：已修复 \(FixStats.shared.total) 次", "DockUnstick: fixed \(FixStats.shared.total) times")
+        guard let button = item?.button else { return }
+        button.image = Preferences.menuBarIcon.image()
+        button.toolTip = L(
+            "DockUnstick：已修复 \(FixStats.shared.total) 次",
+            "DockUnstick: fixed \(FixStats.shared.total) times"
+        )
+        button.setAccessibilityLabel(L("打开 DockUnstick", "Open DockUnstick"))
     }
 
-    // Rebuilt every time it opens so the numbers are current.
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        refreshIcon()
-        menu.removeAllItems()
-        let stats = FixStats.shared
+    func popoverDidClose(_ notification: Notification) {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+    }
 
-        if AXIsProcessTrusted() {
-            menu.addItem(label(L("DockUnstick 正在运行", "DockUnstick is running")))
+    @objc private func togglePanel() {
+        if popover.isShown {
+            popover.performClose(nil)
         } else {
-            menu.addItem(action(L("⚠️ 需要辅助功能权限…", "⚠️ Accessibility permission needed…"), #selector(showPermissions)))
+            showPanel()
         }
-        menu.addItem(.separator())
+    }
 
-        menu.addItem(label(L("已修复 \(stats.total) 次（今天 \(stats.today) 次）", "Fixed \(stats.total) times (\(stats.today) today)")))
-        if let last = stats.lastFix {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.locale = AppLanguage.locale
-            let ago = formatter.localizedString(for: last, relativeTo: Date())
-            menu.addItem(label(L("上次修复：\(ago)", "Last fix: \(ago)")))
+    private func startRefreshTimer() {
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            guard let self, self.popover.isShown else { return }
+            self.model.refresh()
         }
-        if stats.failed > 0 {
-            menu.addItem(label(L("未能修复 \(stats.failed) 次", "Failed \(stats.failed) times")))
-        }
-        menu.addItem(.separator())
-
-        menu.addItem(action(L("打开 DockUnstick 窗口", "Open DockUnstick Window"), #selector(showMainWindow)))
-        let login = action(L("登录时自动启动", "Launch at Login"), #selector(toggleLaunchAtLogin))
-        login.state = LaunchAtLogin.isEnabled ? .on : .off
-        menu.addItem(login)
-        menu.addItem(languageMenu())
-        menu.addItem(action(L("打开日志", "Open Log"), #selector(openLog)))
-        menu.addItem(action(L("重置统计", "Reset Statistics"), #selector(resetStats)))
-        menu.addItem(action(L("项目主页", "Project Page"), #selector(openRepository)))
-        menu.addItem(.separator())
-        menu.addItem(action(L("退出 DockUnstick", "Quit DockUnstick"), #selector(quit), key: "q"))
     }
-
-    private func languageMenu() -> NSMenuItem {
-        let submenu = NSMenu()
-        // Language names stay in their own language so either one can be found.
-        let choices: [(AppLanguage, String)] = [(.system, L("跟随系统", "Same as System")), (.zh, "中文"), (.en, "English")]
-        for (language, title) in choices {
-            let choice = action(title, #selector(selectLanguage(_:)))
-            choice.representedObject = language.rawValue
-            choice.state = AppLanguage.setting == language ? .on : .off
-            submenu.addItem(choice)
-        }
-        let item = NSMenuItem(title: L("语言", "Language"), action: nil, keyEquivalent: "")
-        item.submenu = submenu
-        return item
-    }
-
-    private func label(_ title: String) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        item.isEnabled = false
-        return item
-    }
-
-    private func action(_ title: String, _ selector: Selector, key: String = "") -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: selector, keyEquivalent: key)
-        item.target = self
-        return item
-    }
-
-    @objc private func showPermissions() { onShowPermissions() }
-    @objc private func showMainWindow() { onShowMainWindow() }
-    @objc private func toggleLaunchAtLogin() { LaunchAtLogin.set(!LaunchAtLogin.isEnabled) }
-
-    @objc private func selectLanguage(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let language = AppLanguage(rawValue: raw) else { return }
-        AppLanguage.setting = language
-    }
-
-    @objc private func openLog() { NSWorkspace.shared.open(logURL) }
-    @objc private func resetStats() { FixStats.shared.reset() }
-    @objc private func openRepository() { NSWorkspace.shared.open(repositoryURL) }
-    @objc private func quit() { NSApp.terminate(nil) }
 }

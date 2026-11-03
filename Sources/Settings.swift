@@ -6,12 +6,14 @@ let repositoryURL = URL(string: "https://github.com/LLP2333/dockUnstick")!
 enum Preferences {
     static let didChange = Notification.Name("PreferencesDidChange")
 
-    /// Whether the menu bar icon is shown. Off by default; the main window is
-    /// always reachable by opening the app again.
-    static var showMenuBar: Bool {
-        get { UserDefaults.standard.bool(forKey: "showMenuBar") }
+    static var menuBarIcon: MenuBarIconStyle {
+        get {
+            let raw = UserDefaults.standard.string(forKey: "menuBarIcon") ?? ""
+            return MenuBarIconStyle(rawValue: raw) ?? .original
+        }
         set {
-            UserDefaults.standard.set(newValue, forKey: "showMenuBar")
+            guard newValue != menuBarIcon else { return }
+            UserDefaults.standard.set(newValue.rawValue, forKey: "menuBarIcon")
             NotificationCenter.default.post(name: didChange, object: nil)
         }
     }
