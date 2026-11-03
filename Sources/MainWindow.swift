@@ -69,20 +69,28 @@ final class MainModel: ObservableObject {
 struct MainView: View {
     @ObservedObject var model: MainModel
 
+    // GroupBoxes rather than a Form: a Form scrolls and reports no height of its
+    // own, which collapses it to nothing inside the window.
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 14) {
             header
-            Form {
-                Section(L("修复统计", "Statistics")) {
-                    LabeledContent(L("累计修复", "Total fixes"), value: "\(model.total)")
-                    LabeledContent(L("今天", "Today"), value: "\(model.today)")
-                    LabeledContent(L("上次修复", "Last fix"), value: lastFixText)
+            GroupBox(L("修复统计", "Statistics")) {
+                VStack(spacing: 8) {
+                    row(L("累计修复", "Total fixes"), "\(model.total)")
+                    row(L("今天", "Today"), "\(model.today)")
+                    row(L("上次修复", "Last fix"), lastFixText)
                     if model.failed > 0 {
-                        LabeledContent(L("未能修复", "Failed"), value: "\(model.failed)")
+                        row(L("未能修复", "Failed"), "\(model.failed)")
                     }
-                    Button(L("重置统计", "Reset Statistics")) { FixStats.shared.reset() }
+                    HStack {
+                        Spacer()
+                        Button(L("重置统计", "Reset Statistics")) { FixStats.shared.reset() }
+                    }
                 }
-                Section(L("设置", "Settings")) {
+                .padding(8)
+            }
+            GroupBox(L("设置", "Settings")) {
+                VStack(alignment: .leading, spacing: 10) {
                     Toggle(L("在菜单栏显示图标", "Show icon in menu bar"), isOn: Binding(
                         get: { model.showMenuBar },
                         set: { Preferences.showMenuBar = $0 }))
@@ -97,12 +105,23 @@ struct MainView: View {
                         Text("中文").tag(AppLanguage.zh)
                         Text("English").tag(AppLanguage.en)
                     }
+                    .fixedSize()
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
             }
-            .formStyle(.grouped)
             footer
         }
-        .frame(width: 420)
+        .padding(20)
+        .frame(width: 440)
+    }
+
+    private func row(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value).foregroundStyle(.secondary)
+        }
     }
 
     private var header: some View {
@@ -116,18 +135,15 @@ struct MainView: View {
                     Label(L("正在运行，会自动修复卡住的 Dock", "Running. A stuck Dock is fixed automatically"),
                           systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    HStack {
-                        Label(L("需要辅助功能权限", "Accessibility permission needed"), systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                        Button(L("授权…", "Grant…"), action: model.showPermissions)
-                    }
+                    Label(L("需要辅助功能权限", "Accessibility permission needed"), systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Button(L("授权…", "Grant…"), action: model.showPermissions)
                 }
             }
             Spacer()
         }
-        .padding([.horizontal, .top], 20)
-        .padding(.bottom, 4)
     }
 
     private var footer: some View {
@@ -137,7 +153,6 @@ struct MainView: View {
             Spacer()
             Button(L("退出 DockUnstick", "Quit DockUnstick")) { NSApp.terminate(nil) }
         }
-        .padding([.horizontal, .bottom], 20)
     }
 
     private var lastFixText: String {
