@@ -5,98 +5,101 @@
 <h1 align="center">DockUnstick</h1>
 
 <p align="center">
-  修复 macOS 切换全屏空间后，Dock 卡在悬停状态、不自动收回的问题。<br>
-  A tiny menu bar app that un-sticks the macOS Dock after switching full-screen Spaces.
+  A tiny menu bar app that un-sticks the macOS Dock when it stays shown after switching full-screen Spaces.
+</p>
+
+<p align="center">
+  <b>English</b> | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 ---
 
-## 为什么写这个项目
+## Why this exists
 
-升级到 macOS 27.2 之后，Dock 出现了一个能稳定复现的问题:
+Since macOS 27.2, the Dock has a bug that reproduces every time:
 
-1. 在一个全屏应用里，把鼠标停在 Dock 的某个图标上；
-2. 通过触控板左右滑动，或点击 Dock 图标，切换到另一个全屏应用；
-3. 在切换动画进行时，把鼠标快速移到屏幕中间。
+1. In a full-screen app, rest the cursor on an icon in the Dock;
+2. Switch to another full-screen app by swiping on the trackpad or clicking a Dock icon;
+3. While the switch animation is running, move the cursor quickly to the middle of the screen.
 
-结果 Dock **一直显示着不收回**，那个图标的名称提示也一直挂着，就像鼠标还停在上面一样。只有把鼠标移回 Dock 再移开，或者执行 `killall Dock`，Dock 才会恢复，而且下次切换又会出现。社区里也有不少人报告了同样的问题，目前除了关闭放大效果，没有其他办法。
+The Dock then **stays shown instead of hiding**, and the icon's name tooltip stays up, as if the cursor were still resting on it. Only moving the cursor back onto the Dock and out again, or running `killall Dock`, brings it back, and the next switch breaks it again. Plenty of people have reported the same thing, and the only workaround so far has been turning off magnification.
 
-在 Apple 修复之前，DockUnstick 会在后台自动处理这个问题，不用你动手。
+Until Apple fixes it, DockUnstick handles it in the background so you don't have to.
 
-## 原因
+## The cause
 
-通过监听窗口服务器发给 Dock 进程的事件，可以看到问题出在一个**被丢掉的"鼠标离开"事件**上。
+Listening to the events the window server delivers to the Dock process shows that the problem is a **dropped "mouse exited" event**.
 
-### 两个角色
+### Two players
 
-- **窗口服务器：** 系统里负责盯着鼠标的部分。鼠标进入 Dock 时，它通知 Dock"进来了"(事件 8)；离开时，通知"走了"(事件 9)。
-- **Dock：** 收到"进来了"就显示悬停效果并保持显示；收到"走了"就取消悬停、收回。它不会自己去看鼠标在哪，完全依赖这两个通知。
+- **The window server:** the part of the system that keeps track of the cursor. When the cursor enters the Dock, it tells the Dock "it came in" (event 8); when it leaves, it says "it left" (event 9).
+- **The Dock:** on "it came in" it shows the hover effect and stays shown; on "it left" it drops the hover and hides. It never checks where the cursor is by itself; it relies entirely on these two messages.
 
-### 关键：切换一开始，"走了"就提前发出了
+### The key: "it left" is sent early, as soon as a switch starts
 
-不管鼠标是否真的离开，切换 Space 一开始，窗口服务器就会给 Dock 发一个"走了"，即使鼠标还停在图标上。而此时 Dock 正忙着执行切换动画，会忽略这个通知。
+Whether or not the cursor has really left, the window server sends the Dock an "it left" as soon as a Space switch starts, even while the cursor is still resting on an icon. The Dock is busy running the switch animation at that moment and ignores it.
 
-所以每次切换，Dock 实际上都漏掉了一个"走了"。能不能恢复，就看切换结束时鼠标在哪。
+So on every switch the Dock misses one "it left". Whether it recovers depends on where the cursor is when the switch finishes.
 
-下面两个例子来自实际抓到的事件，切换是通过点击 Dock 图标触发的；用触控板滑动切换时过程完全一样，只是没有点击这一步。
+The two examples below come from captured events. The switch was triggered by clicking a Dock icon; swiping on the trackpad goes exactly the same way, just without the click.
 
-**正常：切换结束时，鼠标还在 Dock 上**
+**Normal: the cursor is still on the Dock when the switch finishes**
 
-| 时间 | 发生了什么 | Dock 的状态 |
+| Time | What happens | Dock state |
 |---|---|---|
-| 31.06–31.19 | 点击 WebStorm 图标，开始切换 | 悬停中 |
-| 31.23 | 提前发出"走了"，被 Dock 忽略 | 仍然悬停 |
-| 31.49 | 切换结束，鼠标还在 Dock 上，窗口服务器补发一次"进来了" | 悬停，和实际一致 |
-| 31.57 | 鼠标移开，窗口服务器发出"走了"，Dock 正常处理 | 退出悬停，收回 ✅ |
+| 31.06–31.19 | Click the WebStorm icon, the switch starts | Hovering |
+| 31.23 | "It left" is sent early; the Dock ignores it | Still hovering |
+| 31.49 | Switch finishes with the cursor still on the Dock; the window server sends "it came in" again | Hovering, matching reality |
+| 31.57 | The cursor moves away; the window server sends "it left" and the Dock handles it | Hover ends, Dock hides ✅ |
 
-**卡住：切换还没结束，鼠标就已经离开**
+**Stuck: the cursor leaves before the switch finishes**
 
-| 时间 | 发生了什么 | Dock 的状态 |
+| Time | What happens | Dock state |
 |---|---|---|
-| 36.54–36.66 | 点击 WebStorm 图标，开始切换 | 悬停中 |
-| 36.70 | 提前发出"走了"，被 Dock 忽略 | 仍然悬停 |
-| 切换过程中 | 鼠标快速移到屏幕中间 | 仍然悬停 |
-| 36.97 | 切换结束，鼠标已经在 Dock 外面 | 仍然悬停 ❌ |
+| 36.54–36.66 | Click the WebStorm icon, the switch starts | Hovering |
+| 36.70 | "It left" is sent early; the Dock ignores it | Still hovering |
+| During the switch | The cursor moves quickly to the middle of the screen | Still hovering |
+| 36.97 | Switch finishes with the cursor already outside the Dock | Still hovering ❌ |
 
-这时窗口服务器认为"走了"已经通知过、鼠标也确实在外面，不会再发任何事件；Dock 没收到"走了"，以为鼠标还在图标上，也不会自己去确认。于是就一直卡着。
+Now the window server considers "it left" already delivered, and the cursor really is outside, so it sends nothing more. The Dock never got its "it left", believes the cursor is still on the icon, and never checks. So it stays stuck.
 
-### 一个比喻
+### An analogy
 
-门卫(窗口服务器)看到客人起身，就打电话通知店主(Dock)"客人走了"。可店主正在搬货，没接到电话。
+A doorman (the window server) sees a customer stand up and phones the shopkeeper (the Dock): "the customer left". But the shopkeeper is busy moving stock and misses the call.
 
-- **客人没走、回到店里：** 门卫会再通知一次"客人来了"，店主就知道了，之后客人真的离开时也能接到电话。
-- **客人趁着搬货直接离开了：** 门卫觉得已经通知过了，不会再打电话；店主却一直以为客人还在店里。
+- **The customer stays and comes back to the counter:** the doorman calls again with "a customer came in", the shopkeeper hears it, and later, when the customer really leaves, that call gets through too.
+- **The customer slips out while the shopkeeper is busy:** the doorman thinks he has already called and doesn't call again, while the shopkeeper keeps thinking the customer is still in the shop.
 
-DockUnstick 做的，就是在发现店主还在等客人时，把门卫那通电话**再打一遍**。
+What DockUnstick does is notice when the shopkeeper is still waiting on a customer, and **make that call again**.
 
-## 它做了什么
+## What it does
 
-- **记录:** 用只监听的事件监听(`CGEvent.tapCreateForPid`)挂在 Dock 进程上，只订阅"进入/离开"两种事件，保存最近一次"鼠标离开"事件。
-- **检测:** 每次切换 Space 后，在第 0.6、1.2、2.0 秒各检查一次。如果鼠标已经不在 Dock 上，但 Dock 仍有图标处于悬停状态，或者本该自动隐藏却仍然显示，就判定为卡住。
-- **修复:** 把保存的"鼠标离开"事件复制一份，更新为当前时间和鼠标位置，投递给 Dock 进程(`CGEvent.postToPid`)。Dock 收到它漏掉的事件后，正常退出悬停并收回。
+- **Records:** a listen-only event tap (`CGEvent.tapCreateForPid`) on the Dock process subscribes to just the "entered/exited" events and keeps the most recent "mouse exited" event.
+- **Detects:** after every Space switch it checks once at 0.6, 1.2 and 2.0 seconds. If the cursor is no longer on the Dock but the Dock still has a hovered icon, or stays shown when it should have auto-hidden, the Dock is stuck.
+- **Fixes:** it copies the saved "mouse exited" event, updates its time and cursor position, and delivers it to the Dock process (`CGEvent.postToPid`). Once the Dock gets the event it missed, it drops the hover and hides as usual.
 
-整个过程**不移动鼠标指针、不重启 Dock、不读取屏幕内容、不联网**。平时不轮询，只在切换 Space 后检查几次。所用接口都是公开 API。
+Throughout, it **never moves the cursor, restarts the Dock, reads the screen or goes online**. It doesn't poll; it only checks a few times after each Space switch. Only public APIs are used.
 
-在作者的机器上实测：卡住的情况 8/8 被修复，从切换 Space 到 Dock 收回大约 1 秒。
+Tested on the author's Mac: 8 of 8 stuck cases fixed, with the Dock hiding about 1 second after the Space switch.
 
-## 安装
+## Installing
 
-需要 macOS 13 或更高版本，支持 Apple 芯片和 Intel 芯片。
+Requires macOS 13 or later. Runs on both Apple silicon and Intel Macs.
 
-### 方式一：下载编译好的版本
+### Option 1: download a build
 
-1. 在 [Releases](https://github.com/LLP2333/dockUnstick/releases) 页面下载最新的 `DockUnstick-x.y.z.zip`，解压后把 `DockUnstick.app` 拖到"应用程序"文件夹；
-2. 第一次打开时，macOS 会提示"无法验证开发者"并拒绝打开。这是因为本项目没有使用付费的 Apple 开发者证书签名和公证。请到 **系统设置 → 隐私与安全性**，在页面下方点「仍要打开」。
+1. Download the latest `DockUnstick-x.y.z.zip` from [Releases](https://github.com/LLP2333/dockUnstick/releases), unzip it and drag `DockUnstick.app` into Applications;
+2. The first time you open it, macOS says it can't verify the developer and refuses to open it. That's because this project isn't signed and notarized with a paid Apple Developer certificate. Go to **System Settings → Privacy & Security** and click "Open Anyway" near the bottom.
 
-也可以在终端里去掉下载标记，之后就能直接打开:
+Alternatively, remove the download flag in Terminal, after which it opens normally:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/DockUnstick.app
 ```
 
-### 方式二：从源码编译
+### Option 2: build from source
 
-需要 Xcode 或 Xcode Command Line Tools(提供 `swiftc`)。
+Requires Xcode or the Xcode Command Line Tools (for `swiftc`).
 
 ```bash
 git clone https://github.com/LLP2333/dockUnstick.git
@@ -104,76 +107,78 @@ cd dockUnstick
 ./build.sh
 ```
 
-建议先把编译出来的 `DockUnstick.app` 移到"应用程序"文件夹，再打开:
+Move the resulting `DockUnstick.app` into Applications before opening it:
 
 ```bash
 mv DockUnstick.app /Applications/
 open /Applications/DockUnstick.app
 ```
 
-### 授权辅助功能
+### Granting Accessibility
 
-首次打开时，DockUnstick 会弹出引导窗口：点「打开系统设置」，在 **隐私与安全性 → 辅助功能** 里打开 DockUnstick 的开关。窗口会自动检测到授权，之后就可以关掉了。
+On first launch DockUnstick opens a setup window: click "Open System Settings" and turn on DockUnstick under **Privacy & Security → Accessibility**. The window notices the permission by itself, and you can close it afterwards.
 
-> 程序是本机临时签名(ad-hoc)的，**每次重新编译后，macOS 都会把它当成新程序**，旧的授权会失效。这时开关看起来是打开的，但其实没有生效。请用 **−** 删除 DockUnstick，再用 **+** 重新添加。
+> The app is ad-hoc signed, so **macOS treats every new build as a new app** and the old permission stops working. The switch then looks on but has no effect. Remove DockUnstick with **−** and add it again with **+**.
 
-## 使用
+## Using it
 
-DockUnstick 只在菜单栏显示一个图标，不出现在 Dock 里。菜单中可以:
+DockUnstick shows only a menu bar icon; it doesn't appear in the Dock. From its menu you can:
 
-- 查看运行状态，需要授权时也从这里打开引导窗口；
-- 查看修复统计：累计次数、今天的次数、上次修复时间、失败次数；
-- 开关「登录时自动启动」(使用系统的登录项，首次可能需要在 系统设置 → 通用 → 登录项 中允许)；
-- 打开日志、重置统计、打开项目主页、退出。
+- see whether it's running, and open the setup window when permission is missing;
+- see fix statistics: total fixes, fixes today, the last fix and failures;
+- turn "Launch at Login" on or off (uses the system login items; the first time you may need to allow it in System Settings → General → Login Items);
+- switch the language: Same as System, 中文 or English. By default it follows the system: Chinese when your first preferred language is Chinese, English for any other language;
+- open the log, reset the statistics, open the project page, or quit.
 
-## 设置
+## Settings
 
-可以用 `defaults` 调整，修改后重启 DockUnstick 生效:
+These can be changed with `defaults`. Apart from `language`, restart DockUnstick for a change to take effect:
 
-| 键 | 类型 | 默认值 | 说明 |
+| Key | Type | Default | Meaning |
 |---|---|---|---|
-| `trace` | bool | `true` | 每次检查都把 Dock 状态写入日志 |
-| `checkDelays` | 数组 | `0.6 1.2 2.0` | 切换 Space 后第几秒检查 Dock |
+| `language` | string | `system` | UI language: `system` (follow the system), `zh` or `en`. Also switchable from the menu, effective immediately |
+| `trace` | bool | `true` | Log the Dock's state at every check |
+| `checkDelays` | array | `0.6 1.2 2.0` | Seconds after a Space switch at which the Dock is checked |
 
 ```bash
 defaults write local.dockunstick trace -bool false
 defaults write local.dockunstick checkDelays -array 0.4 1.0 2.0
 ```
 
-日志位置：`~/Library/Logs/DockUnstick.log`。超过 1 MB 时会改名为 `DockUnstick.log.1`(覆盖上一份)，然后重新开始写，所以两个文件加起来最多约 2 MB。
+The log is at `~/Library/Logs/DockUnstick.log`. Past 1 MB it is renamed to `DockUnstick.log.1` (replacing the previous one) and a fresh log starts, so the two files together stay around 2 MB at most.
 
-## 诊断模式
+## Diagnostic modes
 
-如果系统更新后修复失效了，下面两个模式能帮助定位原因:
+If a system update breaks the fix, these two modes help find out why:
 
 ```bash
-# 60 秒内记录窗口服务器发给 Dock 的所有事件(鼠标移动事件只计数)
+# Log every event the window server delivers to the Dock for 60 seconds (mouse moves are only counted)
 open DockUnstick.app --args --tap 60
 
-# 8 秒后导出 Dock 的辅助功能信息(各图标的位置、悬停状态等)
+# After 8 seconds, dump the Dock's accessibility info (icon positions, hover state and so on)
 open DockUnstick.app --args --dump 8
 ```
 
-结果都写入上面的日志文件。运行前请先退出正在运行的 DockUnstick。
+Both write to the log file above. Quit the running DockUnstick first.
 
-## 局限
+## Limitations
 
-- 这是绕过问题的办法，不是根治。根治需要 Apple 在 Dock 切换动画结束后重新检查鼠标位置。如果你也遇到了，欢迎通过「反馈助理」向 Apple 报告。
-- 修复依赖 Dock 的事件格式（类型 9"鼠标离开"）。如果未来系统改了格式，修复可能失效，日志中会出现 `fix: replayexit did not help`。
-- 判断 Dock 是否收回时，目前只考虑放在主显示器底部的 Dock。
+- This works around the bug rather than fixing it. A real fix needs Apple to re-check the cursor position once the Dock's switch animation ends. If you see this bug too, please report it to Apple with Feedback Assistant.
+- The fix relies on the Dock's event format (type 9, "mouse exited"). If a future macOS changes it, the fix may stop working, and the log will show `fix: replayexit did not help`.
+- When checking whether the Dock has hidden, only a Dock at the bottom of the main display is handled for now.
 
-## 卸载
+## Uninstalling
 
-1. 在菜单中关闭「登录时自动启动」，然后退出 DockUnstick；
-2. 删除 `DockUnstick.app`；
-3. 在 系统设置 → 隐私与安全性 → 辅助功能 中删除 DockUnstick；
-4. 可选：清理设置、统计和日志:
+1. Turn off "Launch at Login" in the menu, then quit DockUnstick;
+2. Delete `DockUnstick.app`;
+3. Remove DockUnstick under System Settings → Privacy & Security → Accessibility;
+4. Optionally, clear its settings, statistics and logs:
 
 ```bash
 defaults delete local.dockunstick
 rm -f ~/Library/Logs/DockUnstick.log ~/Library/Logs/DockUnstick.log.1
 ```
 
-## 许可证
+## License
 
 [MIT](LICENSE)
