@@ -15,6 +15,20 @@ enum Preferences {
             NotificationCenter.default.post(name: didChange, object: nil)
         }
     }
+
+    static let maxCheckDelay = 10.0
+
+    /// Seconds after a Space change at which the Dock is checked, once; 0 checks
+    /// immediately (the default). Read at every Space change, so edits apply at once.
+    static var checkDelay: Double {
+        // double(forKey:) also parses a value written as a string by `defaults write`.
+        get { min(max(UserDefaults.standard.double(forKey: "checkDelay"), 0), maxCheckDelay) }
+        set {
+            UserDefaults.standard.set(min(max(newValue, 0), maxCheckDelay), forKey: "checkDelay")
+            log("check delay: \(checkDelay)s")
+            NotificationCenter.default.post(name: didChange, object: nil)
+        }
+    }
 }
 
 /// Login item through SMAppService.

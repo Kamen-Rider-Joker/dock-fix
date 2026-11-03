@@ -75,7 +75,7 @@ DockUnstick 做的，就是在发现店主还在等客人时，把门卫那通�
 ## 它做了什么
 
 - **记录:** 用只监听的事件监听(`CGEvent.tapCreateForPid`)挂在 Dock 进程上，只订阅"进入/离开"两种事件，保存最近一次"鼠标离开"事件。
-- **检测:** 每次切换 Space 后，在第 0.6、1.2、2.0 秒各检查一次。如果鼠标已经不在 Dock 上，但 Dock 仍有图标处于悬停状态，或者本该自动隐藏却仍然显示，就判定为卡住。
+- **检测:** 每次切换 Space 后检查一次，默认立即检查，也可以设成延迟几秒。如果鼠标已经不在 Dock 上，但 Dock 仍有图标处于悬停状态，或者本该自动隐藏却仍然显示，就判定为卡住。
 - **修复:** 把保存的"鼠标离开"事件复制一份，更新为当前时间和鼠标位置，投递给 Dock 进程(`CGEvent.postToPid`)。Dock 收到它漏掉的事件后，正常退出悬停并收回。
 
 整个过程**不移动鼠标指针、不重启 Dock、不读取屏幕内容、不联网**。平时不轮询，只在切换 Space 后检查几次。所用接口都是公开 API。
@@ -130,21 +130,22 @@ DockUnstick 在后台运行，不出现在 Dock 里。打开 app，或者在它�
   - 「在菜单栏显示图标」:**默认关闭**。打开后，菜单栏图标里也能看到状态、统计和设置，并能打开窗口；
   - 「登录时自动启动」：使用系统的登录项，首次可能需要在 系统设置 → 通用 → 登录项 中允许。登录时自动启动不会弹出窗口，只在后台安静运行；
   - 「语言」：跟随系统、中文或 English。默认跟随系统：系统首选语言是中文时显示中文，其他语言一律显示英文；
+  - 「检查时机」：切换 Space 后什么时候检查 Dock，只检查一次。**默认「立即」**；选「延迟」后可以输入秒数(最多 10 秒，例如 0.01)，填 0 会回到「立即」。修改后立即生效；
 - 打开日志、打开项目主页、退出。
 
 ## 设置
 
-可以用 `defaults` 调整，除了 `language` 以外，修改后都要重启 DockUnstick 才生效:
+可以用 `defaults` 调整。除了 `language` 和 `checkDelay` 以外，修改后都要重启 DockUnstick 才生效:
 
 | 键 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
 | `language` | 字符串 | `system` | 界面语言：`system`(跟随系统)、`zh` 或 `en`，也可以在窗口里切换，立即生效 |
 | `trace` | bool | `true` | 每次检查都把 Dock 状态写入日志 |
-| `checkDelays` | 数组 | `0.6 1.2 2.0` | 切换 Space 后第几秒检查 Dock |
+| `checkDelay` | 数字 | `0` | 切换 Space 后第几秒检查 Dock(只检查一次)，`0` 表示立即，最多 `10`。也可以在窗口里设置，立即生效 |
 
 ```bash
 defaults write local.dockunstick trace -bool false
-defaults write local.dockunstick checkDelays -array 0.4 1.0 2.0
+defaults write local.dockunstick checkDelay -float 0.01
 ```
 
 日志位置：`~/Library/Logs/DockUnstick.log`。超过 1 MB 时会改名为 `DockUnstick.log.1`(覆盖上一份)，然后重新开始写，所以两个文件加起来最多约 2 MB。

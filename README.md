@@ -75,7 +75,7 @@ What DockUnstick does is notice when the shopkeeper is still waiting on a custom
 ## What it does
 
 - **Records:** a listen-only event tap (`CGEvent.tapCreateForPid`) on the Dock process subscribes to just the "entered/exited" events and keeps the most recent "mouse exited" event.
-- **Detects:** after every Space switch it checks once at 0.6, 1.2 and 2.0 seconds. If the cursor is no longer on the Dock but the Dock still has a hovered icon, or stays shown when it should have auto-hidden, the Dock is stuck.
+- **Detects:** after every Space switch it checks once: immediately by default, or after a delay you choose. If the cursor is no longer on the Dock but the Dock still has a hovered icon, or stays shown when it should have auto-hidden, the Dock is stuck.
 - **Fixes:** it copies the saved "mouse exited" event, updates its time and cursor position, and delivers it to the Dock process (`CGEvent.postToPid`). Once the Dock gets the event it missed, it drops the hover and hides as usual.
 
 Throughout, it **never moves the cursor, restarts the Dock, reads the screen or goes online**. It doesn't poll; it only checks a few times after each Space switch. Only public APIs are used.
@@ -130,21 +130,22 @@ DockUnstick runs in the background and doesn't appear in the Dock. Opening the a
   - "Show icon in menu bar": **off by default**. When on, the menu bar icon offers the same status, statistics and settings, and can open the window;
   - "Launch at login": uses the system login items; the first time you may need to allow it in System Settings → General → Login Items. When started at login, DockUnstick stays quiet and shows no window;
   - "Language": Same as System, 中文 or English. By default it follows the system: Chinese when your first preferred language is Chinese, English for any other language;
+  - "Check": when the Dock is checked after a Space switch, once. **"Immediately" by default**; with "After a delay" you type the seconds (up to 10, e.g. 0.01), and 0 goes back to "Immediately". Takes effect at once;
 - open the log, open the project page, or quit.
 
 ## Settings
 
-These can be changed with `defaults`. Apart from `language`, restart DockUnstick for a change to take effect:
+These can be changed with `defaults`. Apart from `language` and `checkDelay`, restart DockUnstick for a change to take effect:
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `language` | string | `system` | UI language: `system` (follow the system), `zh` or `en`. Also switchable in the window, effective immediately |
 | `trace` | bool | `true` | Log the Dock's state at every check |
-| `checkDelays` | array | `0.6 1.2 2.0` | Seconds after a Space switch at which the Dock is checked |
+| `checkDelay` | number | `0` | Seconds after a Space switch at which the Dock is checked, once; `0` means immediately, at most `10`. Also settable in the window, effective immediately |
 
 ```bash
 defaults write local.dockunstick trace -bool false
-defaults write local.dockunstick checkDelays -array 0.4 1.0 2.0
+defaults write local.dockunstick checkDelay -float 0.01
 ```
 
 The log is at `~/Library/Logs/DockUnstick.log`. Past 1 MB it is renamed to `DockUnstick.log.1` (replacing the previous one) and a fresh log starts, so the two files together stay around 2 MB at most.

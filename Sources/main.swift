@@ -8,7 +8,7 @@
 //   open DockUnstick.app --args --tap 60       log events delivered to the Dock for 60 seconds
 // Settings (defaults domain local.dockunstick):
 //   trace        bool, log Dock state at every check (default true)
-//   checkDelays  array of seconds after a Space change at which to check (default 0.6, 1.2, 2.0)
+//   checkDelay   seconds after a Space change at which to check, once (default 0, immediately)
 // Log: ~/Library/Logs/DockUnstick.log
 
 import AppKit

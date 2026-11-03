@@ -24,22 +24,20 @@ func waitUntilFixed(expectHide: Bool) -> Bool {
 // MARK: - Watcher
 
 /// Event-driven: no polling and no mouse monitoring. The bug only happens when the
-/// cursor leaves the Dock during a Space transition, so a few one-off checks shortly
-/// after each Space change are enough. If the cursor is still on the Dock then, the
-/// Dock will get its normal exit event later.
+/// cursor leaves the Dock during a Space transition, so one check right after each
+/// Space change (or after Preferences.checkDelay) is enough. If the cursor is still
+/// on the Dock then, the Dock will get its normal exit event later.
 final class Watcher {
     private var fixing = false
     private var generation = 0
     private let trace = UserDefaults.standard.object(forKey: "trace") as? Bool ?? true
-    /// Seconds after a Space change at which the Dock is checked.
-    private let checkDelays = UserDefaults.standard.array(forKey: "checkDelays") as? [Double] ?? [0.6, 1.2, 2.0]
 
     func start() {
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in self?.spaceChanged() }
         ExitRecorder.ensureAttached()
-        log("watching for Space changes (checks at \(checkDelays)s)")
+        log("watching for Space changes (check at \(Preferences.checkDelay)s)")
     }
 
     private func spaceChanged() {
@@ -47,12 +45,11 @@ final class Watcher {
         generation += 1
         let current = generation
         if trace { log("space changed: cursor=\(cursorLocation()) \(snapshot()?.summary ?? "no dock")") }
-        for delay in checkDelays {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                // A newer Space change supersedes the pending checks.
-                guard let self, self.generation == current else { return }
-                self.check(after: delay)
-            }
+        let delay = Preferences.checkDelay
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            // A newer Space change supersedes the pending check.
+            guard let self, self.generation == current else { return }
+            self.check(after: delay)
         }
     }
 
