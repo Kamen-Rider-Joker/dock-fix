@@ -6,9 +6,9 @@
 //   open DockUnstick.app                       watch and fix (agent mode)
 //   open DockUnstick.app --args --dump 8       dump Dock AX state after 8 seconds
 // Settings (defaults domain local.dockunstick):
-//   strategies  array of reenter | edge | restart, tried in order
-//   trace       bool, log Dock state every tick while watching (default true)
-//   awayDelay   seconds the cursor must be away before the Dock counts as stuck (default 0.5)
+//   strategies   array of axclear | postpid | coredock | reenter | edge | restart, tried in order
+//   trace        bool, log Dock state at every check (default true)
+//   checkDelays  array of seconds after a Space change at which to check (default 0.6, 1.2, 2.0)
 // Log: ~/Library/Logs/DockUnstick.log
 
 import AppKit
@@ -65,12 +65,14 @@ func cursorLocation() -> CGPoint { CGEvent(source: nil)?.location ?? .zero }
 func primaryHeight() -> CGFloat { NSScreen.screens.first?.frame.height ?? 0 }
 
 struct DockItem {
+    let element: AXUIElement
     let title: String
     let frame: CGRect?
     let selected: Bool
 }
 
 struct DockSnapshot {
+    let list: AXUIElement
     let listFrame: CGRect?
     let items: [DockItem]
     var hovered: [DockItem] { items.filter(\.selected) }
@@ -105,11 +107,12 @@ func dockList() -> AXUIElement? {
 func snapshot() -> DockSnapshot? {
     guard let list = dockList() else { return nil }
     let items = (axAttr(list, kAXChildrenAttribute) as? [AXUIElement] ?? []).map {
-        DockItem(title: axAttr($0, kAXTitleAttribute) as? String ?? "?",
+        DockItem(element: $0,
+                 title: axAttr($0, kAXTitleAttribute) as? String ?? "?",
                  frame: axFrame($0),
                  selected: (axAttr($0, kAXSelectedAttribute) as? Bool) ?? false)
     }
-    return DockSnapshot(listFrame: axFrame(list), items: items)
+    return DockSnapshot(list: list, listFrame: axFrame(list), items: items)
 }
 
 /// The Dock should hide on its own when auto-hide is on or the front window is full screen.
@@ -151,7 +154,40 @@ func glide(from start: CGPoint, to end: CGPoint, steps: Int = 4, stepMicros: use
     }
 }
 
+/// Deliver a mouse-moved straight into the Dock's event queue; the real cursor does not move.
+func postMoveToDock(at point: CGPoint) {
+    guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first?.processIdentifier,
+          let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)
+    else { return }
+    event.postToPid(pid)
+}
+
+/// Private CoreDock calls (HIServices). Resolved at runtime so a missing symbol just disables the strategy.
+enum CoreDock {
+    private static let handle = dlopen("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices", RTLD_LAZY)
+    private typealias Getter = @convention(c) () -> DarwinBoolean
+    private typealias Setter = @convention(c) (DarwinBoolean) -> Void
+
+    static func toggleAutoHide() -> Bool {
+        guard let getSym = dlsym(handle, "CoreDockGetAutoHideEnabled"),
+              let setSym = dlsym(handle, "CoreDockSetAutoHideEnabled") else { return false }
+        let get = unsafeBitCast(getSym, to: Getter.self)
+        let set = unsafeBitCast(setSym, to: Setter.self)
+        let original = get()
+        set(DarwinBoolean(!original.boolValue))
+        usleep(80_000)
+        set(original)
+        return true
+    }
+}
+
 enum Strategy: String, CaseIterable {
+    /// Clear the hovered state through Accessibility, if the Dock lets us write it. No cursor movement.
+    case axclear
+    /// Replay an enter/exit pair as events posted only to the Dock process. No cursor movement.
+    case postpid
+    /// Flip auto-hide off and back on through private CoreDock calls. No cursor movement.
+    case coredock
     /// Move onto the stuck (or nearest) item and back, giving the Dock a real enter/exit pair.
     case reenter
     /// Like reenter, but dwell on the item long enough for the Dock to fully register it.
@@ -162,6 +198,23 @@ enum Strategy: String, CaseIterable {
     func apply(_ snap: DockSnapshot, cursor: CGPoint) {
         let target = (snap.hovered.first ?? nearestItem(snap, to: cursor))?.frame
         switch self {
+        case .axclear:
+            var settable = DarwinBoolean(false)
+            for item in snap.hovered {
+                AXUIElementIsAttributeSettable(item.element, kAXSelectedAttribute as CFString, &settable)
+                let result = AXUIElementSetAttributeValue(item.element, kAXSelectedAttribute as CFString, kCFBooleanFalse)
+                log("axclear: \(item.title) AXSelected settable=\(settable.boolValue) set=\(result.rawValue)")
+            }
+            AXUIElementIsAttributeSettable(snap.list, kAXSelectedChildrenAttribute as CFString, &settable)
+            let result = AXUIElementSetAttributeValue(snap.list, kAXSelectedChildrenAttribute as CFString, [] as CFArray)
+            log("axclear: list AXSelectedChildren settable=\(settable.boolValue) set=\(result.rawValue)")
+        case .postpid:
+            guard let target else { return }
+            postMoveToDock(at: CGPoint(x: target.midX, y: target.midY))
+            usleep(60_000)
+            postMoveToDock(at: cursor)
+        case .coredock:
+            if !CoreDock.toggleAutoHide() { log("coredock: symbols not found") }
         case .reenter:
             guard let target else { return }
             glide(from: cursor, to: CGPoint(x: target.midX, y: target.midY))
@@ -186,7 +239,9 @@ enum Strategy: String, CaseIterable {
 func strategies() -> [Strategy] {
     let configured = UserDefaults.standard.stringArray(forKey: "strategies") ?? []
     let parsed = configured.compactMap(Strategy.init(rawValue:))
-    return parsed.isEmpty ? Strategy.allCases : parsed
+    // axclear, postpid and coredock never moved the Dock out of its shown state in
+    // testing, so they are opt-in experiments only.
+    return parsed.isEmpty ? [.reenter, .edge, .restart] : parsed
 }
 
 /// Fixed means: no hovered item, and if the Dock should auto-hide, it actually hides within ~1.5s.
@@ -201,61 +256,46 @@ func waitUntilFixed(expectHide: Bool) -> Bool {
 
 // MARK: - Watcher
 
-/// After every Space change, watch the Dock for a few seconds (longer while the
-/// cursor is still on the Dock) and fix it if it stays stuck.
+/// Event-driven: no polling and no mouse monitoring. The bug only happens when the
+/// cursor leaves the Dock during a Space transition, so a few one-off checks shortly
+/// after each Space change are enough. If the cursor is still on the Dock then, the
+/// Dock will get its normal exit event later.
 final class Watcher {
-    private var timer: Timer?
-    private var deadline = Date.distantPast
-    private var awaySince: Date?
     private var fixing = false
+    private var generation = 0
     private let trace = UserDefaults.standard.object(forKey: "trace") as? Bool ?? true
-    /// How long the cursor must be away before a hovering/shown Dock counts as stuck.
-    /// A healthy Dock hides about 0.4s after the cursor leaves.
-    private let awayDelay = UserDefaults.standard.object(forKey: "awayDelay") as? Double ?? 0.5
+    /// Seconds after a Space change at which the Dock is checked.
+    private let checkDelays = UserDefaults.standard.array(forKey: "checkDelays") as? [Double] ?? [0.6, 1.2, 2.0]
 
     func start() {
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
-        ) { [weak self] _ in self?.watch() }
-        log("watching for Space changes (strategies: \(strategies().map(\.rawValue)))")
+        ) { [weak self] _ in self?.spaceChanged() }
+        log("watching for Space changes (strategies: \(strategies().map(\.rawValue)), checks at \(checkDelays)s)")
     }
 
-    private func watch() {
+    private func spaceChanged() {
+        generation += 1
+        let current = generation
         if trace { log("space changed: cursor=\(cursorLocation()) \(snapshot()?.summary ?? "no dock")") }
-        deadline = Date().addingTimeInterval(5)
-        awaySince = nil
-        guard timer == nil else { return }
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in self?.tick() }
+        for delay in checkDelays {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                // A newer Space change supersedes the pending checks.
+                guard let self, self.generation == current else { return }
+                self.check(after: delay)
+            }
+        }
     }
 
-    private func tick() {
+    private func check(after delay: Double) {
         guard !fixing, let snap = snapshot() else { return }
         let cursor = cursorLocation()
         let expectHide = hideExpected()
-        if trace { log("tick: cursor=(\(Int(cursor.x)),\(Int(cursor.y))) \(snap.summary) hideExpected=\(expectHide)") }
-
-        if snap.contains(cursor) {
-            awaySince = nil
-            deadline = max(deadline, Date().addingTimeInterval(5))
-        } else if awaySince == nil {
-            awaySince = Date()
-        }
-
-        // Stuck: cursor has been away for a while, yet the Dock still hovers an item
-        // or stays shown when it should have auto-hidden.
-        let away = awaySince.map { Date().timeIntervalSince($0) } ?? 0
-        let hovering = !snap.hovered.isEmpty
-        let lingering = expectHide && snap.isShown
-        if away >= awayDelay && (hovering || lingering) {
-            unstick(snap, cursor: cursor, expectHide: expectHide)
-            awaySince = Date()
-            deadline = Date().addingTimeInterval(3)
-        }
-
-        if Date() > deadline {
-            timer?.invalidate()
-            timer = nil
-        }
+        if trace { log("check +\(delay)s: cursor=(\(Int(cursor.x)),\(Int(cursor.y))) \(snap.summary) hideExpected=\(expectHide)") }
+        // Stuck: cursor is away, yet the Dock still hovers an item or stays shown
+        // when it should have auto-hidden.
+        guard !snap.contains(cursor), !snap.hovered.isEmpty || (expectHide && snap.isShown) else { return }
+        unstick(snap, cursor: cursor, expectHide: expectHide)
     }
 
     private func unstick(_ snap: DockSnapshot, cursor: CGPoint, expectHide: Bool) {
@@ -265,11 +305,10 @@ final class Watcher {
         for strategy in strategies() {
             strategy.apply(snap, cursor: cursor)
             if strategy == .restart { log("fix: restart (Dock relaunched)"); return }
-            if waitUntilFixed(expectHide: expectHide) {
-                log("fix: \(strategy.rawValue) worked -> \(snapshot()?.summary ?? "?")")
-                return
-            }
-            log("fix: \(strategy.rawValue) did not help -> \(snapshot()?.summary ?? "?")")
+            let fixed = waitUntilFixed(expectHide: expectHide)
+            let moved = cursorLocation() != cursor ? " (cursor moved)" : ""
+            log("fix: \(strategy.rawValue) \(fixed ? "worked" : "did not help")\(moved) -> \(snapshot()?.summary ?? "?")")
+            if fixed { return }
         }
     }
 }
