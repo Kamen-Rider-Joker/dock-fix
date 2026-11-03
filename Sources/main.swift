@@ -7,7 +7,7 @@
 //   open DockUnstick.app --args --dump 8       dump Dock AX state after 8 seconds
 //   open DockUnstick.app --args --tap 60       log events delivered to the Dock for 60 seconds
 // Settings (defaults domain local.dockunstick):
-//   strategies   array of replayexit | axclear | postpid | coredock | reenter | edge | restart, tried in order
+//   strategies   array of replayexit | reenter | edge | restart, tried in order
 //   trace        bool, log Dock state at every check (default true)
 //   checkDelays  array of seconds after a Space change at which to check (default 0.6, 1.2, 2.0)
 // Log: ~/Library/Logs/DockUnstick.log
@@ -66,14 +66,12 @@ func cursorLocation() -> CGPoint { CGEvent(source: nil)?.location ?? .zero }
 func primaryHeight() -> CGFloat { NSScreen.screens.first?.frame.height ?? 0 }
 
 struct DockItem {
-    let element: AXUIElement
     let title: String
     let frame: CGRect?
     let selected: Bool
 }
 
 struct DockSnapshot {
-    let list: AXUIElement
     let listFrame: CGRect?
     let items: [DockItem]
     var hovered: [DockItem] { items.filter(\.selected) }
@@ -108,12 +106,11 @@ func dockList() -> AXUIElement? {
 func snapshot() -> DockSnapshot? {
     guard let list = dockList() else { return nil }
     let items = (axAttr(list, kAXChildrenAttribute) as? [AXUIElement] ?? []).map {
-        DockItem(element: $0,
-                 title: axAttr($0, kAXTitleAttribute) as? String ?? "?",
+        DockItem(title: axAttr($0, kAXTitleAttribute) as? String ?? "?",
                  frame: axFrame($0),
                  selected: (axAttr($0, kAXSelectedAttribute) as? Bool) ?? false)
     }
-    return DockSnapshot(list: list, listFrame: axFrame(list), items: items)
+    return DockSnapshot(listFrame: axFrame(list), items: items)
 }
 
 /// The Dock should hide on its own when auto-hide is on or the front window is full screen.
@@ -155,42 +152,9 @@ func glide(from start: CGPoint, to end: CGPoint, steps: Int = 4, stepMicros: use
     }
 }
 
-/// Deliver a mouse-moved straight into the Dock's event queue; the real cursor does not move.
-func postMoveToDock(at point: CGPoint) {
-    guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first?.processIdentifier,
-          let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)
-    else { return }
-    event.postToPid(pid)
-}
-
-/// Private CoreDock calls (HIServices). Resolved at runtime so a missing symbol just disables the strategy.
-enum CoreDock {
-    private static let handle = dlopen("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices", RTLD_LAZY)
-    private typealias Getter = @convention(c) () -> DarwinBoolean
-    private typealias Setter = @convention(c) (DarwinBoolean) -> Void
-
-    static func toggleAutoHide() -> Bool {
-        guard let getSym = dlsym(handle, "CoreDockGetAutoHideEnabled"),
-              let setSym = dlsym(handle, "CoreDockSetAutoHideEnabled") else { return false }
-        let get = unsafeBitCast(getSym, to: Getter.self)
-        let set = unsafeBitCast(setSym, to: Setter.self)
-        let original = get()
-        set(DarwinBoolean(!original.boolValue))
-        usleep(80_000)
-        set(original)
-        return true
-    }
-}
-
 enum Strategy: String, CaseIterable {
     /// Replay the window server's own mouse-exited event to the Dock. No cursor movement.
     case replayexit
-    /// Clear the hovered state through Accessibility, if the Dock lets us write it. No cursor movement.
-    case axclear
-    /// Replay an enter/exit pair as events posted only to the Dock process. No cursor movement.
-    case postpid
-    /// Flip auto-hide off and back on through private CoreDock calls. No cursor movement.
-    case coredock
     /// Move onto the stuck (or nearest) item and back, giving the Dock a real enter/exit pair.
     case reenter
     /// Like reenter, but dwell on the item long enough for the Dock to fully register it.
@@ -209,23 +173,6 @@ enum Strategy: String, CaseIterable {
             exit.location = cursor
             exit.timestamp = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
             exit.postToPid(pid)
-        case .axclear:
-            var settable = DarwinBoolean(false)
-            for item in snap.hovered {
-                AXUIElementIsAttributeSettable(item.element, kAXSelectedAttribute as CFString, &settable)
-                let result = AXUIElementSetAttributeValue(item.element, kAXSelectedAttribute as CFString, kCFBooleanFalse)
-                log("axclear: \(item.title) AXSelected settable=\(settable.boolValue) set=\(result.rawValue)")
-            }
-            AXUIElementIsAttributeSettable(snap.list, kAXSelectedChildrenAttribute as CFString, &settable)
-            let result = AXUIElementSetAttributeValue(snap.list, kAXSelectedChildrenAttribute as CFString, [] as CFArray)
-            log("axclear: list AXSelectedChildren settable=\(settable.boolValue) set=\(result.rawValue)")
-        case .postpid:
-            guard let target else { return }
-            postMoveToDock(at: CGPoint(x: target.midX, y: target.midY))
-            usleep(60_000)
-            postMoveToDock(at: cursor)
-        case .coredock:
-            if !CoreDock.toggleAutoHide() { log("coredock: symbols not found") }
         case .reenter:
             guard let target else { return }
             glide(from: cursor, to: CGPoint(x: target.midX, y: target.midY))
@@ -250,9 +197,7 @@ enum Strategy: String, CaseIterable {
 func strategies() -> [Strategy] {
     let configured = UserDefaults.standard.stringArray(forKey: "strategies") ?? []
     let parsed = configured.compactMap(Strategy.init(rawValue:))
-    // axclear, postpid and coredock never moved the Dock out of its shown state in
-    // testing, so they are opt-in experiments only.
-    return parsed.isEmpty ? [.replayexit, .reenter, .edge, .restart] : parsed
+    return parsed.isEmpty ? Strategy.allCases : parsed
 }
 
 /// Fixed means: no hovered item, and if the Dock should auto-hide, it actually hides within ~1.5s.
