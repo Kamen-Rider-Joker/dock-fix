@@ -28,6 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ExitRecorder.ensureAttached()
             self?.menuBar?.refreshIcon()
         })
+        NotificationCenter.default.addObserver(forName: AppLanguage.didChange, object: nil, queue: .main) { [weak self] _ in
+            self?.permissions?.languageChanged()
+        }
         watcher.start()
         if !AXIsProcessTrusted() { permissions?.show() }
     }

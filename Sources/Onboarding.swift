@@ -15,8 +15,7 @@ final class PermissionWindowController {
 
     func show() {
         if window == nil {
-            let view = PermissionView(model: model, openSettings: openSettings, close: { [weak self] in self?.close() })
-            let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+            let window = NSWindow(contentViewController: makeContent())
             window.title = "DockUnstick"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
@@ -27,6 +26,15 @@ final class PermissionWindowController {
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
         startPolling()
+    }
+
+    private func makeContent() -> NSViewController {
+        NSHostingController(rootView: PermissionView(model: model, openSettings: openSettings, close: { [weak self] in self?.close() }))
+    }
+
+    /// Re-render in the new language if the window is open.
+    func languageChanged() {
+        window?.contentViewController = makeContent()
     }
 
     private func startPolling() {
@@ -68,27 +76,30 @@ struct PermissionView: View {
                     .resizable()
                     .frame(width: 64, height: 64)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("DockUnstick 需要辅助功能权限").font(.title2.bold())
-                    Text("用于修复切换全屏空间后 Dock 卡住、不自动收回的问题。")
+                    Text(L("DockUnstick 需要辅助功能权限", "DockUnstick needs Accessibility permission")).font(.title2.bold())
+                    Text(L("用于修复切换全屏空间后 Dock 卡住、不自动收回的问题。",
+                           "It fixes the Dock getting stuck and not hiding after switching full-screen Spaces."))
                         .foregroundStyle(.secondary)
                 }
             }
 
-            GroupBox("权限用途") {
+            GroupBox(L("权限用途", "What it is used for")) {
                 VStack(alignment: .leading, spacing: 6) {
-                    bullet("读取 Dock 的状态，判断它是否卡住")
-                    bullet("接收发给 Dock 的“鼠标离开”事件，在它丢失时补发一次")
-                    bullet("不读取屏幕内容、不移动鼠标、不联网")
+                    bullet(L("读取 Dock 的状态，判断它是否卡住", "Reading the Dock's state to tell whether it is stuck"))
+                    bullet(L("接收发给 Dock 的“鼠标离开”事件，在它丢失时补发一次",
+                             "Receiving the Dock's \"mouse exited\" events and re-sending one the Dock dropped"))
+                    bullet(L("不读取屏幕内容、不移动鼠标、不联网", "It never reads the screen, moves the cursor or goes online"))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(6)
             }
 
-            GroupBox("授权步骤") {
+            GroupBox(L("授权步骤", "How to grant it")) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("1. 点击下方「打开系统设置」")
-                    Text("2. 在「辅助功能」列表中打开 DockUnstick 的开关")
-                    Text("3. 如果开关已打开、这里仍显示等待：用 − 删除 DockUnstick，再用 + 重新添加（更新程序后常见）")
+                    Text(L("1. 点击下方「打开系统设置」", "1. Click \"Open System Settings\" below"))
+                    Text(L("2. 在「辅助功能」列表中打开 DockUnstick 的开关", "2. Turn on DockUnstick in the Accessibility list"))
+                    Text(L("3. 如果开关已打开、这里仍显示等待：用 − 删除 DockUnstick，再用 + 重新添加（更新程序后常见）",
+                           "3. If it is already on but this window keeps waiting, remove DockUnstick with − and add it again with + (common after an update)"))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -97,15 +108,15 @@ struct PermissionView: View {
 
             HStack {
                 if model.granted {
-                    Label("已授权，DockUnstick 正在运行", systemImage: "checkmark.circle.fill")
+                    Label(L("已授权，DockUnstick 正在运行", "Granted. DockUnstick is running"), systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                     Spacer()
-                    Button("完成", action: close).keyboardShortcut(.defaultAction)
+                    Button(L("完成", "Done"), action: close).keyboardShortcut(.defaultAction)
                 } else {
-                    Label("等待授权…", systemImage: "hourglass")
+                    Label(L("等待授权…", "Waiting for permission…"), systemImage: "hourglass")
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("打开系统设置", action: openSettings).keyboardShortcut(.defaultAction)
+                    Button(L("打开系统设置", "Open System Settings"), action: openSettings).keyboardShortcut(.defaultAction)
                 }
             }
         }
