@@ -7,7 +7,6 @@
 //   open DockUnstick.app --args --dump 8       dump Dock AX state after 8 seconds
 //   open DockUnstick.app --args --tap 60       log events delivered to the Dock for 60 seconds
 // Settings (defaults domain local.dockunstick):
-//   strategies   array of replayexit | reenter | edge | restart, tried in order
 //   trace        bool, log Dock state at every check (default true)
 //   checkDelays  array of seconds after a Space change at which to check (default 0.6, 1.2, 2.0)
 // Log: ~/Library/Logs/DockUnstick.log
@@ -136,68 +135,15 @@ func dump() {
     }
 }
 
-// MARK: - Fix strategies, tried in order until the Dock is no longer stuck
+// MARK: - Fix
 
-func postMove(to point: CGPoint) {
-    CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)?
-        .post(tap: .cghidEventTap)
-}
-
-/// Glide in a few steps so the Dock sees real motion instead of one coalesced jump.
-func glide(from start: CGPoint, to end: CGPoint, steps: Int = 4, stepMicros: useconds_t = 12_000) {
-    for step in 1...steps {
-        let t = CGFloat(step) / CGFloat(steps)
-        postMove(to: CGPoint(x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t))
-        usleep(stepMicros)
-    }
-}
-
-enum Strategy: String, CaseIterable {
-    /// Replay the window server's own mouse-exited event to the Dock. No cursor movement.
-    case replayexit
-    /// Move onto the stuck (or nearest) item and back, giving the Dock a real enter/exit pair.
-    case reenter
-    /// Like reenter, but dwell on the item long enough for the Dock to fully register it.
-    case edge
-    /// Restart the Dock. Always works, but flickers.
-    case restart
-
-    func apply(_ snap: DockSnapshot, cursor: CGPoint) {
-        let target = (snap.hovered.first ?? nearestItem(snap, to: cursor))?.frame
-        switch self {
-        case .replayexit:
-            guard let exit = ExitRecorder.lastExit?.copy(), let pid = dockPid() else {
-                log("replayexit: no recorded exit event")
-                return
-            }
-            exit.location = cursor
-            exit.timestamp = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-            exit.postToPid(pid)
-        case .reenter:
-            guard let target else { return }
-            glide(from: cursor, to: CGPoint(x: target.midX, y: target.midY))
-            usleep(60_000)
-            glide(from: CGPoint(x: target.midX, y: target.midY), to: cursor)
-        case .edge:
-            guard let target else { return }
-            let bottom = CGPoint(x: target.midX, y: primaryHeight() - 2)
-            glide(from: cursor, to: bottom, steps: 6)
-            usleep(250_000)
-            glide(from: bottom, to: cursor, steps: 6)
-        case .restart:
-            NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").forEach { $0.forceTerminate() }
-        }
-    }
-
-    private func nearestItem(_ snap: DockSnapshot, to cursor: CGPoint) -> DockItem? {
-        snap.items.filter { $0.frame != nil }.min { abs($0.frame!.midX - cursor.x) < abs($1.frame!.midX - cursor.x) }
-    }
-}
-
-func strategies() -> [Strategy] {
-    let configured = UserDefaults.standard.stringArray(forKey: "strategies") ?? []
-    let parsed = configured.compactMap(Strategy.init(rawValue:))
-    return parsed.isEmpty ? Strategy.allCases : parsed
+/// Replay the window server's own mouse-exited event to the Dock; the real cursor does not move.
+func replayExit(cursor: CGPoint) -> Bool {
+    guard let exit = ExitRecorder.lastExit?.copy(), let pid = dockPid() else { return false }
+    exit.location = cursor
+    exit.timestamp = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+    exit.postToPid(pid)
+    return true
 }
 
 /// Fixed means: no hovered item, and if the Dock should auto-hide, it actually hides within ~1.5s.
@@ -228,7 +174,7 @@ final class Watcher {
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in self?.spaceChanged() }
         ExitRecorder.ensureAttached()
-        log("watching for Space changes (strategies: \(strategies().map(\.rawValue)), checks at \(checkDelays)s)")
+        log("watching for Space changes (checks at \(checkDelays)s)")
     }
 
     private func spaceChanged() {
@@ -260,14 +206,12 @@ final class Watcher {
         fixing = true
         defer { fixing = false }
         log("stuck: cursor=(\(Int(cursor.x)),\(Int(cursor.y))) \(snap.summary) hideExpected=\(expectHide)")
-        for strategy in strategies() {
-            strategy.apply(snap, cursor: cursor)
-            if strategy == .restart { log("fix: restart (Dock relaunched)"); return }
-            let fixed = waitUntilFixed(expectHide: expectHide)
-            let moved = cursorLocation() != cursor ? " (cursor moved)" : ""
-            log("fix: \(strategy.rawValue) \(fixed ? "worked" : "did not help")\(moved) -> \(snapshot()?.summary ?? "?")")
-            if fixed { return }
+        guard replayExit(cursor: cursor) else {
+            log("fix: no recorded exit event to replay")
+            return
         }
+        let fixed = waitUntilFixed(expectHide: expectHide)
+        log("fix: replayexit \(fixed ? "worked" : "did not help") -> \(snapshot()?.summary ?? "?")")
     }
 }
 
