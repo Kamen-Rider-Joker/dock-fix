@@ -1,28 +1,42 @@
 import AppKit
-import ServiceManagement
 
-let repositoryURL = URL(string: "https://github.com/LLP2333/dockUnstick")!
-
-/// Menu bar item: running state, fix statistics and a few actions.
+/// Optional menu bar item: running state, fix statistics and a few actions.
+/// Shown only while Preferences.showMenuBar is on.
 final class MenuBarController: NSObject, NSMenuDelegate {
-    private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+    private var item: NSStatusItem?
     private let menu = NSMenu()
     private let onShowPermissions: () -> Void
+    private let onShowMainWindow: () -> Void
 
-    init(onShowPermissions: @escaping () -> Void) {
+    init(onShowPermissions: @escaping () -> Void, onShowMainWindow: @escaping () -> Void) {
         self.onShowPermissions = onShowPermissions
+        self.onShowMainWindow = onShowMainWindow
         super.init()
         menu.delegate = self
-        item.menu = menu
-        refreshIcon()
+        updateVisibility()
         for name in [FixStats.didChange, AppLanguage.didChange] {
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 self?.refreshIcon()
             }
         }
+        NotificationCenter.default.addObserver(forName: Preferences.didChange, object: nil, queue: .main) { [weak self] _ in
+            self?.updateVisibility()
+        }
+    }
+
+    private func updateVisibility() {
+        if Preferences.showMenuBar, item == nil {
+            item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+            item?.menu = menu
+            refreshIcon()
+        } else if !Preferences.showMenuBar, let item {
+            NSStatusBar.system.removeStatusItem(item)
+            self.item = nil
+        }
     }
 
     func refreshIcon() {
+        guard let item else { return }
         let symbol = AXIsProcessTrusted() ? "dock.arrow.down.rectangle" : "exclamationmark.triangle"
         item.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "DockUnstick")
         item.button?.toolTip = L("DockUnstick：已修复 \(FixStats.shared.total) 次", "DockUnstick: fixed \(FixStats.shared.total) times")
@@ -53,8 +67,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         }
         menu.addItem(.separator())
 
+        menu.addItem(action(L("打开 DockUnstick 窗口", "Open DockUnstick Window"), #selector(showMainWindow)))
         let login = action(L("登录时自动启动", "Launch at Login"), #selector(toggleLaunchAtLogin))
-        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        login.state = LaunchAtLogin.isEnabled ? .on : .off
         menu.addItem(login)
         menu.addItem(languageMenu())
         menu.addItem(action(L("打开日志", "Open Log"), #selector(openLog)))
@@ -92,21 +107,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     @objc private func showPermissions() { onShowPermissions() }
-    @objc private func toggleLaunchAtLogin() {
-        let service = SMAppService.mainApp
-        do {
-            if service.status == .enabled {
-                try service.unregister()
-            } else {
-                try service.register()
-            }
-        } catch {
-            log("login item: \(error.localizedDescription)")
-        }
-        // The user may still have to allow it under Login Items.
-        if service.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
-        log("login item status: \(service.status.rawValue)")
-    }
+    @objc private func showMainWindow() { onShowMainWindow() }
+    @objc private func toggleLaunchAtLogin() { LaunchAtLogin.set(!LaunchAtLogin.isEnabled) }
 
     @objc private func selectLanguage(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let language = AppLanguage(rawValue: raw) else { return }
