@@ -81,7 +81,22 @@ DockUnstick 做的，就是在发现店主还在等客人时，把门卫那通�
 
 ## 安装
 
-需要 macOS 13 或更高版本，以及 Xcode 或 Xcode Command Line Tools(提供 `swiftc`)。
+需要 macOS 13 或更高版本，支持 Apple 芯片和 Intel 芯片。
+
+### 方式一：下载编译好的版本
+
+1. 在 [Releases](https://github.com/LLP2333/dockUnstick/releases) 页面下载最新的 `DockUnstick-x.y.z.zip`，解压后把 `DockUnstick.app` 拖到"应用程序"文件夹；
+2. 第一次打开时，macOS 会提示"无法验证开发者"并拒绝打开。这是因为本项目没有使用付费的 Apple 开发者证书签名和公证。请到 **系统设置 → 隐私与安全性**，在页面下方点「仍要打开」。
+
+也可以在终端里去掉下载标记，之后就能直接打开:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/DockUnstick.app
+```
+
+### 方式二：从源码编译
+
+需要 Xcode 或 Xcode Command Line Tools(提供 `swiftc`)。
 
 ```bash
 git clone https://github.com/LLP2333/dockUnstick.git
