@@ -48,10 +48,19 @@ final class PermissionWindowController {
         }
     }
 
+    private var prompted = false
+
+    /// The first click shows only the system prompt, whose own button opens System
+    /// Settings. macOS may not show the prompt again in the same run, so later
+    /// clicks open the Accessibility list directly.
     private func openSettings() {
-        // Prompting also adds DockUnstick to the Accessibility list.
-        _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        if !prompted {
+            prompted = true
+            // Prompting also adds DockUnstick to the Accessibility list.
+            _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
+        } else {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        }
     }
 
     private func close() {
@@ -96,7 +105,9 @@ struct PermissionView: View {
 
             GroupBox(L("授权步骤", "How to grant it")) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(L("1. 点击下方「打开系统设置」", "1. Click \"Open System Settings\" below"))
+                    Text(L("1. 点击下方「授权…」，在系统弹窗中选择「打开系统设置」",
+                           "1. Click \"Grant…\" below, then \"Open System Settings\" in the system prompt"))
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(L("2. 在「辅助功能」列表中打开 DockUnstick 的开关", "2. Turn on DockUnstick in the Accessibility list"))
                     Text(L("3. 如果开关已打开、这里仍显示等待：用 − 删除 DockUnstick，再用 + 重新添加（更新程序后常见）",
                            "3. If it is already on but this window keeps waiting, remove DockUnstick with − and add it again with + (common after an update)"))
@@ -116,7 +127,7 @@ struct PermissionView: View {
                     Label(L("等待授权…", "Waiting for permission…"), systemImage: "hourglass")
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button(L("打开系统设置", "Open System Settings"), action: openSettings).keyboardShortcut(.defaultAction)
+                    Button(L("授权…", "Grant…"), action: openSettings).keyboardShortcut(.defaultAction)
                 }
             }
         }

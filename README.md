@@ -116,7 +116,7 @@ open /Applications/DockUnstick.app
 
 ### Granting Accessibility
 
-On first launch DockUnstick opens a setup window: click "Open System Settings" and turn on DockUnstick under **Privacy & Security → Accessibility**. The window notices the permission by itself, and you can close it afterwards.
+On first launch DockUnstick opens a setup window: click "Grant…", choose "Open System Settings" in the system prompt, and turn on DockUnstick under **Privacy & Security → Accessibility**. The window notices the permission by itself, and you can close it afterwards.
 
 > The app is ad-hoc signed, so **macOS treats every new build as a new app** and the old permission stops working. The switch then looks on but has no effect. Remove DockUnstick with **−** and add it again with **+**.
 
