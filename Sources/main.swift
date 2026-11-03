@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let watcher = Watcher()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.mainMenu = KeyCommands.shared.makeMainMenu()
         permissions = PermissionWindowController(onGranted: { [weak self] in
             ExitRecorder.ensureAttached()
             self?.menuBar?.refreshIcon()
